@@ -2,103 +2,156 @@ import requests
 import time
 from datetime import datetime
 
-# ==============================
+# =========================
 # CONFIG
-# ==============================
-TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
-CHAT_ID = "6974761713"
+# =========================
+TOKEN = "TU_TOKEN"
+CHAT_ID = "TU_CHAT_ID"
 
-TIMEFRAMES = ["5m", "15m", "1h", "2h", "4h"]
+SYMBOLS = ["BTCUSDT", "ETHUSDT"]
 
-# ==============================
+TIMEFRAMES = {
+    "5m": "5m",
+    "15m": "15m",
+    "30m": "30m",
+    "1h": "1h",
+    "4h": "4h"
+}
+
+# =========================
 # TELEGRAM
-# ==============================
-def enviar_telegram(mensaje):
+# =========================
+def enviar_telegram(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     data = {
         "chat_id": CHAT_ID,
-        "text": mensaje
+        "text": msg
     }
     try:
         requests.post(url, data=data)
-    except Exception as e:
-        print("Error Telegram:", e)
+    except:
+        pass
 
-# ==============================
-# TOP CRYPTO DINÁMICO
-# ==============================
-def top_crypto():
-    url = "https://api.binance.com/api/v3/ticker/24hr"
+# =========================
+# DATA BINANCE
+# =========================
+def obtener_datos(symbol, interval):
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=100"
     data = requests.get(url).json()
 
-    usdt = [x for x in data if "USDT" in x["symbol"]]
-    usdt.sort(key=lambda x: float(x["quoteVolume"]), reverse=True)
+    closes = [float(c[4]) for c in data]
+    highs = [float(c[2]) for c in data]
+    lows = [float(c[3]) for c in data]
+    volumes = [float(c[5]) for c in data]
 
-    return [x["symbol"] for x in usdt[:20]]
+    return closes, highs, lows, volumes
 
-# ==============================
-# DATOS
-# ==============================
-def get_klines(symbol, interval):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=100"
-    return requests.get(url).json()
+# =========================
+# VWAP REAL
+# =========================
+def calcular_vwap(highs, lows, closes, volumes):
+    vwap = []
+    cumulative_pv = 0
+    cumulative_vol = 0
 
-# ==============================
-# ANALISIS
-# ==============================
-def analizar(symbol, tf):
-    datos = get_klines(symbol, tf)
+    for i in range(len(closes)):
+        typical_price = (highs[i] + lows[i] + closes[i]) / 3
+        pv = typical_price * volumes[i]
 
-    # FIX ERROR (evita crash)
-    cierres = [float(c[4]) for c in datos if isinstance(c, list) and len(c) > 4]
+        cumulative_pv += pv
+        cumulative_vol += volumes[i]
 
-    if len(cierres) < 50:
+        vwap.append(cumulative_pv / cumulative_vol)
+
+    return vwap
+
+# =========================
+# DETECTOR DE SEÑAL
+# =========================
+def detectar_senal(symbol, tf):
+
+    closes, highs, lows, volumes = obtener_datos(symbol, tf)
+    vwap = calcular_vwap(highs, lows, closes, volumes)
+
+    if len(closes) < 2:
         return None
 
-    ema20 = sum(cierres[-20:]) / 20
-    ema50 = sum(cierres[-50:]) / 50
+    c = closes[-1]
+    c_prev = closes[-2]
 
-    if ema20 > ema50:
-        return "LONG"
-    elif ema20 < ema50:
-        return "SHORT"
+    v = vwap[-1]
+    v_prev = vwap[-2]
+
+    # =========================
+    # CONDICIONES
+    # =========================
+    cond1_long = c > v
+    cond2_long = c > c_prev
+    cond3_long = v > v_prev
+
+    cond1_short = c < v
+    cond2_short = c < c_prev
+    cond3_short = v < v_prev
+
+    score_long = sum([cond1_long, cond2_long, cond3_long])
+    score_short = sum([cond1_short, cond2_short, cond3_short])
+
+    # =========================
+    # CRUCE
+    # =========================
+    cruce_long = c_prev < v_prev and c > v
+    cruce_short = c_prev > v_prev and c < v
+
+    # =========================
+    # REGLAS SEGÚN TF
+    # =========================
+    if tf == "5m":
+        min_score = 2
+    else:
+        min_score = 3
+
+    # =========================
+    # SEÑALES
+    # =========================
+    if score_long >= min_score and cruce_long:
+        return "LONG", score_long
+
+    if score_short >= min_score and cruce_short:
+        return "SHORT", score_short
 
     return None
 
-# ==============================
-# MAIN LOOP
-# ==============================
-def main():
-    print("🚀 RADAR ACTIVO")
+# =========================
+# LOOP PRINCIPAL
+# =========================
+print("🚀 ORION RADAR INICIADO")
 
-    while True:
-        try:
-            cryptos = top_crypto()
-            print("TOP:", cryptos[:5])
+while True:
+    try:
+        for symbol in SYMBOLS:
+            for tf in TIMEFRAMES:
 
-            for symbol in cryptos:
-                for tf in TIMEFRAMES:
+                resultado = detectar_senal(symbol, tf)
 
-                    resultado = analizar(symbol, tf)
+                if resultado:
+                    tipo, score = resultado
 
-                    if resultado:
-                        mensaje = f"""🚨 CRYPTO
-{symbol} | {tf}
-Dirección: {resultado}
-Hora: {datetime.now().strftime('%H:%M:%S')}"""
+                    mensaje = f"""
+🚨 SEÑAL ORION
 
-                        print(mensaje)
-                        enviar_telegram(mensaje)
+📊 {symbol}
+⏱ TF: {tf}
+📈 Tipo: {tipo}
+🔥 Score: {score}
 
-            print("----- ESCANEO -----\n")
-            time.sleep(60)
+🧠 Basado en VWAP + Momentum + Tendencia
+"""
 
-        except Exception as e:
-            print("ERROR GENERAL:", e)
-            time.sleep(30)
+                    print(mensaje)
+                    enviar_telegram(mensaje)
 
-# ==============================
-# START
-# ==============================
-if __name__ == "__main__":
-    main()
+        time.sleep(60)
+
+    except Exception as e:
+        print("ERROR:", e)
+        time.sleep(60)
