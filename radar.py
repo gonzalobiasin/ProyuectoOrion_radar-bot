@@ -3,23 +3,42 @@ import time
 import os
 from datetime import datetime
 
+# ============================
+# CONFIG
+# ============================
+
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
-CHAT_ID = "6974761713"
+
+TU_CHAT_ID = "6974761713"
+CANAL_ID = "-1003937597372"       
+
+# ============================
+# TELEGRAM (DOBLE ENVÍO)
+# ============================
 
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+
+        # 👉 A VOS
+        requests.post(url, data={"chat_id": TU_CHAT_ID, "text": msg})
+
+        # 👉 AL CANAL
+        requests.post(url, data={"chat_id": CANAL_ID, "text": msg})
+
     except Exception as e:
         print("Error Telegram:", e)
 
-enviar_telegram("🚀 ORION VWAP OKX ACTIVO")
+enviar_telegram("🚀 ORION OKX ACTIVO")
 
-# TIMEFRAMES OKX
+# ============================
+# TIMEFRAMES
+# ============================
+
 timeframes = ["5m", "15m", "1H", "4H", "8H", "12H", "1D"]
 
 # ============================
-# TOP CRYPTO OKX (PERPETUOS)
+# TOP 20 CRYPTO OKX
 # ============================
 
 def obtener_top_crypto():
@@ -77,13 +96,13 @@ def calcular_vwap(data):
     return vwap_list
 
 # ============================
-# CONTROL DE VELA (ANTI SPAM REAL)
+# ANTI-SPAM POR VELA
 # ============================
 
 ultima_vela = {}
 
 # ============================
-# LÓGICA EXACTA TRADINGVIEW
+# LÓGICA TRADINGVIEW
 # ============================
 
 def evaluar(symbol, tf):
@@ -111,23 +130,12 @@ def evaluar(symbol, tf):
     v = vwap[-1]
     v_prev = vwap[-2]
 
-    # CONDICIONES EXACTAS
-    cond_long = [
-        c > v,
-        c > c_prev,
-        v > v_prev
-    ]
-
-    cond_short = [
-        c < v,
-        c < c_prev,
-        v < v_prev
-    ]
+    cond_long = [c > v, c > c_prev, v > v_prev]
+    cond_short = [c < v, c < c_prev, v < v_prev]
 
     score_long = sum(cond_long)
     score_short = sum(cond_short)
 
-    # CRUCE REAL (SIN FLEXIBILIDAD)
     cross_up = c_prev < v_prev and c > v
     cross_down = c_prev > v_prev and c < v
 
@@ -157,17 +165,20 @@ while True:
         for s in activos:
             for tf in timeframes:
 
-                sig = evaluar(s, tf)
+                señal = evaluar(s, tf)
 
-                if sig:
+                if señal:
+
                     msg = f"""
-🚨 ORION VWAP
+🚨 Señal Proyecto Orion
 
-{s}
-TF: {tf}
-{sig}
-{datetime.now().strftime("%H:%M:%S")}
+Activo: {s}
+Temporalidad: {tf}
+Dirección: {señal}
+
+Hora: {datetime.now().strftime("%H:%M:%S")}
 """
+
                     print(msg)
                     enviar_telegram(msg)
                     time.sleep(1)
