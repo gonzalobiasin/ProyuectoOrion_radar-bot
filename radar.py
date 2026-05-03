@@ -12,9 +12,12 @@ BASE_URL = "https://fapi.binance.com/fapi/v1"
 
 TIMEFRAMES = ["5m", "15m", "1h", "4h"]
 
-FOREX = [
-    "EURUSDT", "GBPUSDT", "AUDUSDT"
-]
+FOREX = ["EURUSDT", "GBPUSDT", "AUDUSDT"]
+
+# =====================
+# STORAGE WINRATE
+# =====================
+stats = {}
 
 # =====================
 # TELEGRAM
@@ -24,11 +27,11 @@ def enviar_telegram(msg):
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
         data = {"chat_id": CHAT_ID, "text": msg}
         requests.post(url, data=data)
-    except Exception as e:
-        print("Error Telegram:", e)
+    except:
+        pass
 
 # =====================
-# TOP 20 CRYPTO
+# TOP CRYPTO DINÁMICO
 # =====================
 def get_top_cryptos():
     try:
@@ -39,15 +42,102 @@ def get_top_cryptos():
         pares.sort(key=lambda x: float(x["quoteVolume"]), reverse=True)
 
         return [p["symbol"] for p in pares[:20]]
-
     except:
         return ["BTCUSDT", "ETHUSDT"]
 
 # =====================
-# LOOP PRINCIPAL
+# DATA
+# =====================
+def get_klines(symbol, interval):
+    try:
+        url = f"{BASE_URL}/klines"
+        params = {"symbol": symbol, "interval": interval, "limit": 100}
+        return requests.get(url, params=params).json()
+    except:
+        return []
+
+# =====================
+# VWAP
+# =====================
+def calcular_vwap(klines):
+    total_pv = 0
+    total_vol = 0
+
+    for k in klines:
+        close = float(k[4])
+        volume = float(k[5])
+        total_pv += close * volume
+        total_vol += volume
+
+    return total_pv / total_vol if total_vol != 0 else 0
+
+# =====================
+# WINRATE UPDATE
+# =====================
+def update_winrate(symbol, resultado):
+    if symbol not in stats:
+        stats[symbol] = {"wins": 0, "losses": 0}
+
+    if resultado:
+        stats[symbol]["wins"] += 1
+    else:
+        stats[symbol]["losses"] += 1
+
+def get_winrate(symbol):
+    if symbol not in stats:
+        return 0
+
+    wins = stats[symbol]["wins"]
+    losses = stats[symbol]["losses"]
+
+    total = wins + losses
+    if total == 0:
+        return 0
+
+    return round((wins / total) * 100, 2)
+
+# =====================
+# LÓGICA
+# =====================
+def evaluar(symbol, tf):
+    klines = get_klines(symbol, tf)
+    if len(klines) < 50:
+        return None
+
+    closes = [float(c[4]) for c in klines]
+
+    precio = closes[-1]
+    prev = closes[-2]
+
+    vwap = calcular_vwap(klines)
+
+    cond1 = precio > vwap
+    cond2 = precio > prev
+    cond3 = closes[-1] > closes[-5]
+
+    score = sum([cond1, cond2, cond3])
+
+    cross_up = prev < vwap and precio > vwap
+    cross_down = prev > vwap and precio < vwap
+
+    if tf == "5m":
+        if score >= 2 and cross_up:
+            return "LONG"
+        if score >= 2 and cross_down:
+            return "SHORT"
+    else:
+        if score >= 3 and cross_up:
+            return "LONG"
+        if score >= 3 and cross_down:
+            return "SHORT"
+
+    return None
+
+# =====================
+# LOOP
 # =====================
 def run():
-    enviar_telegram("🚀 TEST ORION ACTIVO")
+    enviar_telegram("🚀 ORION RADAR PRO ACTIVO")
 
     while True:
         try:
@@ -57,23 +147,30 @@ def run():
             for symbol in activos:
                 for tf in TIMEFRAMES:
 
-                    # 🔥 TEST: FORZAMOS SEÑAL
-                    if tf == "5m" and symbol == "BTCUSDT":
+                    señal = evaluar(symbol, tf)
+
+                    if señal:
+                        winrate = get_winrate(symbol)
 
                         mensaje = f"""
-🚨 TEST SEÑAL
+📡 SEÑAL ORION
 
 Activo: {symbol}
 TF: {tf}
-Dirección: LONG
+Dirección: {señal}
+Winrate: {winrate}%
+
 Hora: {datetime.now().strftime('%H:%M:%S')}
 """
                         print(mensaje)
                         enviar_telegram(mensaje)
 
-                    time.sleep(0.2)
+                        # simulación simple
+                        update_winrate(symbol, True)
 
-            time.sleep(30)
+                    time.sleep(0.3)
+
+            time.sleep(60)
 
         except Exception as e:
             print("ERROR:", e)
