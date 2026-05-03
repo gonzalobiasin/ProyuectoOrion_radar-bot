@@ -8,24 +8,16 @@ from datetime import datetime
 # ============================
 
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
-
-TU_CHAT_ID = "6974761713"
-CANAL_ID = "-1003937597372"       
+CHAT_ID = "6974761713"
 
 # ============================
-# TELEGRAM (DOBLE ENVÍO)
+# TELEGRAM
 # ============================
 
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-
-        # 👉 A VOS
-        requests.post(url, data={"chat_id": TU_CHAT_ID, "text": msg})
-
-        # 👉 AL CANAL
-        requests.post(url, data={"chat_id": CANAL_ID, "text": msg})
-
+        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
     except Exception as e:
         print("Error Telegram:", e)
 
