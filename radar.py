@@ -129,7 +129,7 @@ def signal(symbol, tf):
 # LOOP PRINCIPAL
 # =========================
 print("🚀 ORION RADAR PRO ACTIVO")
-
+enviar_telegram("✅ BOT FUNCIONANDO")
 while True:
     try:
         for symbol in SYMBOLS:
