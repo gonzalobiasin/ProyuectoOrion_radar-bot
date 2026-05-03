@@ -3,198 +3,141 @@ import time
 import os
 from datetime import datetime
 
-# ============================
-# CONFIG
-# ============================
-
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
 CHAT_ID = "6974761713"
-
-# ============================
-# TELEGRAM
-# ============================
 
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
-    except Exception as e:
-        print("Error Telegram:", e)
+    except:
+        pass
 
-# ============================
-# INICIO
-# ============================
-
-enviar_telegram("🚀 ORION RADAR PRO ACTIVO")
-
-# ============================
-# TIMEFRAMES
-# ============================
+enviar_telegram("🚀 ORION VWAP RADAR ACTIVO")
 
 timeframes = ["5m", "15m", "1h", "4h", "8h", "12h", "1d"]
-
-# ============================
-# TOP 20 CRYPTO DINÁMICAS
-# ============================
 
 def obtener_top_crypto():
     url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
     data = requests.get(url).json()
-
-    filtrado = [x for x in data if x["symbol"].endswith("USDT")]
-    ordenado = sorted(filtrado, key=lambda x: float(x["quoteVolume"]), reverse=True)
-
-    return [x["symbol"] for x in ordenado[:20]]
-
-# ============================
-# FOREX (BINANCE)
-# ============================
+    data = [x for x in data if x["symbol"].endswith("USDT")]
+    data = sorted(data, key=lambda x: float(x["quoteVolume"]), reverse=True)
+    return [x["symbol"] for x in data[:20]]
 
 forex = ["EURUSDT", "GBPUSDT", "AUDUSDT"]
 
-# ============================
-# DATOS
-# ============================
-
-def obtener_datos(symbol, interval):
-    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit=100"
+def obtener_datos(symbol, tf):
+    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={tf}&limit=100"
     return requests.get(url).json()
 
-# ============================
-# INDICADORES
-# ============================
-
-def ema(valores, periodo):
-    k = 2 / (periodo + 1)
-    ema_val = valores[0]
-    for precio in valores:
-        ema_val = precio * k + ema_val * (1 - k)
-    return ema_val
-
 def calcular_vwap(data):
-    total_vol = 0
-    total_price_vol = 0
+    pv = 0
+    vol = 0
+    vwap_list = []
 
     for d in data:
-        high = float(d[2])
-        low = float(d[3])
-        close = float(d[4])
-        vol = float(d[5])
+        h, l, c, v = float(d[2]), float(d[3]), float(d[4]), float(d[5])
+        tp = (h + l + c) / 3
+        pv += tp * v
+        vol += v
+        vwap_list.append(pv / vol if vol != 0 else 0)
 
-        tp = (high + low + close) / 3
-        total_price_vol += tp * vol
-        total_vol += vol
+    return vwap_list
 
-    return total_price_vol / total_vol if total_vol != 0 else 0
+# anti spam
+ultimas = {}
 
-# ============================
-# ANTI SPAM
-# ============================
-
-ultimas_senales = {}
-
-def ya_enviada(symbol, tf, señal):
-    key = f"{symbol}-{tf}-{señal}"
+def permitido(key):
     ahora = time.time()
-
-    if key in ultimas_senales:
-        if ahora - ultimas_senales[key] < 900:
-            return True
-
-    ultimas_senales[key] = ahora
-    return False
+    if key in ultimas and ahora - ultimas[key] < 900:
+        return False
+    ultimas[key] = ahora
+    return True
 
 # ============================
-# LÓGICA DE SEÑALES
+# LÓGICA EXACTA TRADINGVIEW
 # ============================
 
 def evaluar(symbol, tf):
-    try:
-        data = obtener_datos(symbol, tf)
-        closes = [float(d[4]) for d in data]
-
-        precio = closes[-1]
-        ema20 = ema(closes[-20:], 20)
-        ema50 = ema(closes[-50:], 50)
-        vwap = calcular_vwap(data)
-
-        # TENDENCIA
-        alcista = ema20 > ema50
-        bajista = ema20 < ema50
-
-        # MOMENTUM
-        momentum_up = closes[-1] > closes[-3]
-        momentum_down = closes[-1] < closes[-3]
-
-        # VWAP BASE
-        sobre_vwap = precio > vwap
-        bajo_vwap = precio < vwap
-
-        # TIMING (zona cercana a EMA20)
-        cerca_ema = abs(precio - ema20) / ema20 < 0.002  # 0.2%
-
-        # SCORE
-        score_long = sum([alcista, momentum_up])
-        score_short = sum([bajista, momentum_down])
-
-        # ============================
-        # REGLAS
-        # ============================
-
-        # 🔹 TF 5m → 2 condiciones
-        if tf == "5m":
-            if score_long >= 2 and sobre_vwap and cerca_ema:
-                return "LONG"
-
-            if score_short >= 2 and bajo_vwap and cerca_ema:
-                return "SHORT"
-
-        # 🔹 TF 15m+ → 3 condiciones (más exigente)
-        else:
-            if score_long >= 2 and sobre_vwap and cerca_ema:
-                return "LONG"
-
-            if score_short >= 2 and bajo_vwap and cerca_ema:
-                return "SHORT"
-
+    data = obtener_datos(symbol, tf)
+    if len(data) < 3:
         return None
 
-    except Exception as e:
-        print("Error evaluar:", e)
-        return None
+    closes = [float(x[4]) for x in data]
+    vwap = calcular_vwap(data)
+
+    c = closes[-1]
+    c_prev = closes[-2]
+
+    v = vwap[-1]
+    v_prev = vwap[-2]
+
+    # condiciones LONG
+    cond_long = [
+        c > v,
+        c > c_prev,
+        v > v_prev
+    ]
+
+    # condiciones SHORT
+    cond_short = [
+        c < v,
+        c < c_prev,
+        v < v_prev
+    ]
+
+    score_long = sum(cond_long)
+    score_short = sum(cond_short)
+
+    # cruce
+    cross_up = c_prev < v_prev and c > v
+    cross_down = c_prev > v_prev and c < v
+
+    # reglas
+    if tf == "5m":
+        if score_long >= 2 and cross_up:
+            return "LONG"
+        if score_short >= 2 and cross_down:
+            return "SHORT"
+    else:
+        if score_long >= 3 and cross_up:
+            return "LONG"
+        if score_short >= 3 and cross_down:
+            return "SHORT"
+
+    return None
 
 # ============================
-# LOOP PRINCIPAL
+# LOOP
 # ============================
 
 while True:
-    print("🔄 escaneando mercado...")
+    print("escaneando...")
 
     try:
-        cryptos = obtener_top_crypto()
-        activos = cryptos + forex
+        activos = obtener_top_crypto() + forex
 
-        for symbol in activos:
+        for s in activos:
             for tf in timeframes:
 
-                señal = evaluar(symbol, tf)
+                sig = evaluar(s, tf)
 
-                if señal and not ya_enviada(symbol, tf, señal):
+                if sig:
+                    key = f"{s}-{tf}-{sig}"
 
-                    mensaje = f"""
-🚨 SEÑAL ORION
+                    if permitido(key):
+                        msg = f"""
+🚨 SEÑAL ORION VWAP
 
-Activo: {symbol}
-TF: {tf}
-Dirección: {señal}
-Hora: {datetime.now().strftime("%H:%M:%S")}
+{s} | {tf}
+{sig}
+{datetime.now().strftime("%H:%M:%S")}
 """
-
-                    print("Señal:", mensaje)
-                    enviar_telegram(mensaje)
-                    time.sleep(1)
+                        print(msg)
+                        enviar_telegram(msg)
+                        time.sleep(1)
 
     except Exception as e:
-        print("Error general:", e)
+        print("error:", e)
 
     time.sleep(30)
