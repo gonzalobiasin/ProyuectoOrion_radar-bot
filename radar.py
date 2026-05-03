@@ -28,13 +28,13 @@ def enviar_telegram(msg):
 enviar_telegram("🚀 ORION RADAR PRO ACTIVO")
 
 # ============================
-# TIMEFRAMES (ACTUALIZADO)
+# TIMEFRAMES
 # ============================
 
 timeframes = ["5m", "15m", "1h", "4h", "8h", "12h", "1d"]
 
 # ============================
-# TOP 20 CRYPTO DINÁMICAS (FUTUROS)
+# TOP CRYPTO
 # ============================
 
 def obtener_top_crypto():
@@ -88,13 +88,12 @@ def calcular_vwap(data):
     return total_price_vol / total_vol if total_vol != 0 else 0
 
 # ============================
-# EVALUAR
+# EVALUAR (CORREGIDO)
 # ============================
 
 def evaluar(symbol, tf):
     try:
         data = obtener_datos(symbol, tf)
-
         closes = [float(d[4]) for d in data]
 
         precio = closes[-1]
@@ -102,54 +101,42 @@ def evaluar(symbol, tf):
         ema50 = ema(closes[-50:], 50)
         vwap = calcular_vwap(data)
 
-        # TENDENCIA
+        # tendencia
         alcista = ema20 > ema50
         bajista = ema20 < ema50
 
-        # MOMENTUM
+        # momentum
         momentum_up = closes[-1] > closes[-3]
         momentum_down = closes[-1] < closes[-3]
 
-        # CRUCE (OBLIGATORIO)
+        # cruce
         cross_up = closes[-2] < ema20 and closes[-1] > ema20
         cross_down = closes[-2] > ema20 and closes[-1] < ema20
 
-        # VWAP BASE
+        # vwap
         sobre_vwap = precio > vwap
         bajo_vwap = precio < vwap
 
-        # SCORE
-        score_long = 0
-        score_short = 0
-
-        if alcista:
-            score_long += 1
-        if momentum_up:
-            score_long += 1
-
-        if bajista:
-            score_short += 1
-        if momentum_down:
-            score_short += 1
+        # score
+        score_long = sum([alcista, momentum_up])
+        score_short = sum([bajista, momentum_down])
 
         # ============================
-        # REGLAS
+        # REGLAS CORREGIDAS
         # ============================
 
-        # 🔥 TF 5m → 2 condiciones + cruce + VWAP
+        # 🔥 TF 5m
         if tf == "5m":
             if score_long >= 2 and cross_up and sobre_vwap:
                 return "LONG"
-
             if score_short >= 2 and cross_down and bajo_vwap:
                 return "SHORT"
 
-        # 🔥 TF 15m en adelante → 3 condiciones + cruce + VWAP
+        # 🔥 TF 15m+
         else:
-            if score_long >= 2 and alcista and cross_up and sobre_vwap:
+            if score_long >= 2 and cross_up and sobre_vwap:
                 return "LONG"
-
-            if score_short >= 2 and bajista and cross_down and bajo_vwap:
+            if score_short >= 2 and cross_down and bajo_vwap:
                 return "SHORT"
 
         return None
@@ -176,7 +163,7 @@ def ya_enviada(symbol, tf, señal):
     return False
 
 # ============================
-# LOOP PRINCIPAL
+# LOOP
 # ============================
 
 while True:
