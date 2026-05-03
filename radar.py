@@ -44,7 +44,6 @@ def calcular_vwap(data):
 
     return vwap_list
 
-# anti spam
 ultimas = {}
 
 def permitido(key):
@@ -53,10 +52,6 @@ def permitido(key):
         return False
     ultimas[key] = ahora
     return True
-
-# ============================
-# LÓGICA EXACTA TRADINGVIEW
-# ============================
 
 def evaluar(symbol, tf):
     data = obtener_datos(symbol, tf)
@@ -72,28 +67,16 @@ def evaluar(symbol, tf):
     v = vwap[-1]
     v_prev = vwap[-2]
 
-    # condiciones LONG
-    cond_long = [
-        c > v,
-        c > c_prev,
-        v > v_prev
-    ]
-
-    # condiciones SHORT
-    cond_short = [
-        c < v,
-        c < c_prev,
-        v < v_prev
-    ]
+    cond_long = [c > v, c > c_prev, v > v_prev]
+    cond_short = [c < v, c < c_prev, v < v_prev]
 
     score_long = sum(cond_long)
     score_short = sum(cond_short)
 
-    # cruce
-    cross_up = c_prev < v_prev and c > v
-    cross_down = c_prev > v_prev and c < v
+    # 🔥 CRUCE MEJORADO
+    cross_up = c > v and (c_prev < v_prev or abs(c - v) / v < 0.003)
+    cross_down = c < v and (c_prev > v_prev or abs(c - v) / v < 0.003)
 
-    # reglas
     if tf == "5m":
         if score_long >= 2 and cross_up:
             return "LONG"
@@ -106,10 +89,6 @@ def evaluar(symbol, tf):
             return "SHORT"
 
     return None
-
-# ============================
-# LOOP
-# ============================
 
 while True:
     print("escaneando...")
