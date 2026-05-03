@@ -13,22 +13,36 @@ def enviar_telegram(msg):
     except:
         pass
 
-enviar_telegram("🚀 ORION DEBUG ACTIVO")
+enviar_telegram("🚀 ORION FIX ACTIVO")
 
 timeframes = ["5m", "15m", "1h"]
 
 def obtener_top_crypto():
     url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
     data = requests.get(url).json()
+
+    # 🔥 VALIDACIÓN
+    if not isinstance(data, list):
+        print("Error obteniendo top crypto:", data)
+        return []
+
     data = [x for x in data if x["symbol"].endswith("USDT")]
     data = sorted(data, key=lambda x: float(x["quoteVolume"]), reverse=True)
-    return [x["symbol"] for x in data[:10]]  # SOLO 10 PARA DEBUG
+
+    return [x["symbol"] for x in data[:10]]
 
 forex = ["EURUSDT", "GBPUSDT"]
 
 def obtener_datos(symbol, tf):
     url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={tf}&limit=50"
-    return requests.get(url).json()
+    data = requests.get(url).json()
+
+    # 🔥 VALIDACIÓN CLAVE
+    if not isinstance(data, list):
+        print(f"ERROR BINANCE {symbol} {tf}:", data)
+        return None
+
+    return data
 
 def calcular_vwap(data):
     pv = 0
@@ -44,12 +58,19 @@ def calcular_vwap(data):
 
     return vwap_list
 
+ultimas = {}
+
+def permitido(key):
+    ahora = time.time()
+    if key in ultimas and ahora - ultimas[key] < 900:
+        return False
+    ultimas[key] = ahora
+    return True
+
 def evaluar(symbol, tf):
     data = obtener_datos(symbol, tf)
 
-    # 🔴 VALIDACIÓN CRÍTICA
-    if not isinstance(data, list) or len(data) < 3:
-        print(f"⚠️ SIN DATOS: {symbol} {tf}")
+    if data is None or len(data) < 3:
         return None
 
     closes = [float(x[4]) for x in data]
@@ -67,22 +88,17 @@ def evaluar(symbol, tf):
     cross_up = c > v and (c_prev < v_prev or abs(c - v) / v < 0.005)
     cross_down = c < v and (c_prev > v_prev or abs(c - v) / v < 0.005)
 
-    # 🔥 DEBUG REAL
-    print(f"{symbol} {tf} | price={c:.2f} vwap={v:.2f} scoreL={score_long} scoreS={score_short}")
+    print(f"{symbol} {tf} | scoreL={score_long} scoreS={score_short}")
 
     if tf == "5m":
         if score_long >= 2 and cross_up:
-            print("➡️ LONG DETECTADO")
             return "LONG"
         if score_short >= 2 and cross_down:
-            print("➡️ SHORT DETECTADO")
             return "SHORT"
     else:
         if score_long >= 3 and cross_up:
-            print("➡️ LONG DETECTADO")
             return "LONG"
         if score_short >= 3 and cross_down:
-            print("➡️ SHORT DETECTADO")
             return "SHORT"
 
     return None
@@ -99,16 +115,20 @@ while True:
                 sig = evaluar(s, tf)
 
                 if sig:
-                    msg = f"""
-🚨 SEÑAL DEBUG
+                    key = f"{s}-{tf}-{sig}"
+
+                    if permitido(key):
+                        msg = f"""
+🚨 SEÑAL ORION
 
 {s} | {tf}
 {sig}
 {datetime.now().strftime("%H:%M:%S")}
 """
-                    enviar_telegram(msg)
+                        enviar_telegram(msg)
+                        time.sleep(1)
 
     except Exception as e:
-        print("ERROR:", e)
+        print("ERROR GENERAL:", e)
 
     time.sleep(20)
