@@ -28,10 +28,10 @@ def enviar_telegram(msg):
 enviar_telegram("🚀 ORION RADAR PRO ACTIVO")
 
 # ============================
-# TIMEFRAMES
+# TIMEFRAMES (ACTUALIZADO)
 # ============================
 
-timeframes = ["5m", "15m", "1h", "4h"]
+timeframes = ["5m", "15m", "1h", "4h", "8h", "12h", "1d"]
 
 # ============================
 # TOP 20 CRYPTO DINÁMICAS (FUTUROS)
@@ -47,7 +47,7 @@ def obtener_top_crypto():
     return [x["symbol"] for x in ordenado[:20]]
 
 # ============================
-# FOREX (SIMULADO EN BINANCE)
+# FOREX
 # ============================
 
 forex = ["EURUSDT", "GBPUSDT", "AUDUSDT", "JPYUSDT", "CHFUSDT"]
@@ -88,7 +88,7 @@ def calcular_vwap(data):
     return total_price_vol / total_vol if total_vol != 0 else 0
 
 # ============================
-# EVALUAR (LÓGICA CORRECTA)
+# EVALUAR
 # ============================
 
 def evaluar(symbol, tf):
@@ -110,7 +110,7 @@ def evaluar(symbol, tf):
         momentum_up = closes[-1] > closes[-3]
         momentum_down = closes[-1] < closes[-3]
 
-        # CRUCES (OBLIGATORIOS)
+        # CRUCE (OBLIGATORIO)
         cross_up = closes[-2] < ema20 and closes[-1] > ema20
         cross_down = closes[-2] > ema20 and closes[-1] < ema20
 
@@ -136,7 +136,7 @@ def evaluar(symbol, tf):
         # REGLAS
         # ============================
 
-        # 🔥 TF 5m
+        # 🔥 TF 5m → 2 condiciones + cruce + VWAP
         if tf == "5m":
             if score_long >= 2 and cross_up and sobre_vwap:
                 return "LONG"
@@ -144,7 +144,7 @@ def evaluar(symbol, tf):
             if score_short >= 2 and cross_down and bajo_vwap:
                 return "SHORT"
 
-        # 🔥 TF 15m+ (3 condiciones)
+        # 🔥 TF 15m en adelante → 3 condiciones + cruce + VWAP
         else:
             if score_long >= 2 and alcista and cross_up and sobre_vwap:
                 return "LONG"
@@ -159,7 +159,7 @@ def evaluar(symbol, tf):
         return None
 
 # ============================
-# CONTROL DE SPAM (NO REPETIR)
+# ANTI SPAM
 # ============================
 
 ultimas_senales = {}
@@ -169,14 +169,14 @@ def ya_enviada(symbol, tf, señal):
     ahora = time.time()
 
     if key in ultimas_senales:
-        if ahora - ultimas_senales[key] < 900:  # 15 min bloqueo
+        if ahora - ultimas_senales[key] < 900:
             return True
 
     ultimas_senales[key] = ahora
     return False
 
 # ============================
-# LOOP
+# LOOP PRINCIPAL
 # ============================
 
 while True:
@@ -194,7 +194,7 @@ while True:
                 if señal and not ya_enviada(symbol, tf, señal):
 
                     mensaje = f"""
-🚨 SEÑAL
+🚨 SEÑAL ORION
 
 Activo: {symbol}
 TF: {tf}
