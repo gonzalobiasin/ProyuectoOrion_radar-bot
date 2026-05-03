@@ -10,53 +10,75 @@ def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
-    except:
-        pass
+    except Exception as e:
+        print("Error Telegram:", e)
 
-enviar_telegram("🚀 ORION FIX ACTIVO")
+enviar_telegram("🚀 ORION OKX PERPETUOS ACTIVO")
 
-timeframes = ["5m", "15m", "1h"]
+timeframes = ["5m", "15m", "1H", "4H", "8H", "12H", "1D"]
+
+# ============================
+# TOP CRYPTO OKX (SWAP)
+# ============================
 
 def obtener_top_crypto():
-    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+    url = "https://www.okx.com/api/v5/market/tickers?instType=SWAP"
     data = requests.get(url).json()
 
-    # 🔥 VALIDACIÓN
-    if not isinstance(data, list):
-        print("Error obteniendo top crypto:", data)
+    if "data" not in data:
+        print("Error OKX:", data)
         return []
 
-    data = [x for x in data if x["symbol"].endswith("USDT")]
-    data = sorted(data, key=lambda x: float(x["quoteVolume"]), reverse=True)
+    # ordenar por volumen
+    ordenado = sorted(data["data"], key=lambda x: float(x["volCcy24h"]), reverse=True)
 
-    return [x["symbol"] for x in data[:10]]
+    symbols = []
+    for x in ordenado:
+        if "USDT" in x["instId"]:
+            symbols.append(x["instId"])
 
-forex = ["EURUSDT", "GBPUSDT"]
+    return symbols[:20]
+
+# ============================
+# DATOS VELAS OKX
+# ============================
 
 def obtener_datos(symbol, tf):
-    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={tf}&limit=50"
+    url = f"https://www.okx.com/api/v5/market/candles?instId={symbol}&bar={tf}&limit=100"
     data = requests.get(url).json()
 
-    # 🔥 VALIDACIÓN CLAVE
-    if not isinstance(data, list):
-        print(f"ERROR BINANCE {symbol} {tf}:", data)
+    if "data" not in data:
+        print("ERROR OKX:", data)
         return None
 
-    return data
+    return data["data"]
+
+# ============================
+# VWAP
+# ============================
 
 def calcular_vwap(data):
     pv = 0
     vol = 0
     vwap_list = []
 
-    for d in data:
-        h, l, c, v = float(d[2]), float(d[3]), float(d[4]), float(d[5])
+    for d in reversed(data):  # OKX viene invertido
+        h = float(d[2])
+        l = float(d[3])
+        c = float(d[4])
+        v = float(d[5])
+
         tp = (h + l + c) / 3
         pv += tp * v
         vol += v
+
         vwap_list.append(pv / vol if vol != 0 else 0)
 
     return vwap_list
+
+# ============================
+# ANTI SPAM
+# ============================
 
 ultimas = {}
 
@@ -67,11 +89,17 @@ def permitido(key):
     ultimas[key] = ahora
     return True
 
+# ============================
+# LÓGICA
+# ============================
+
 def evaluar(symbol, tf):
     data = obtener_datos(symbol, tf)
 
     if data is None or len(data) < 3:
         return None
+
+    data = list(reversed(data))
 
     closes = [float(x[4]) for x in data]
     vwap = calcular_vwap(data)
@@ -82,13 +110,15 @@ def evaluar(symbol, tf):
     v = vwap[-1]
     v_prev = vwap[-2]
 
-    score_long = sum([c > v, c > c_prev, v > v_prev])
-    score_short = sum([c < v, c < c_prev, v < v_prev])
+    cond_long = [c > v, c > c_prev, v > v_prev]
+    cond_short = [c < v, c < c_prev, v < v_prev]
 
+    score_long = sum(cond_long)
+    score_short = sum(cond_short)
+
+    # cruce mejorado
     cross_up = c > v and (c_prev < v_prev or abs(c - v) / v < 0.005)
     cross_down = c < v and (c_prev > v_prev or abs(c - v) / v < 0.005)
-
-    print(f"{symbol} {tf} | scoreL={score_long} scoreS={score_short}")
 
     if tf == "5m":
         if score_long >= 2 and cross_up:
@@ -103,11 +133,15 @@ def evaluar(symbol, tf):
 
     return None
 
+# ============================
+# LOOP
+# ============================
+
 while True:
-    print("🔄 ESCANEANDO...")
+    print("🔄 ESCANEANDO OKX...")
 
     try:
-        activos = obtener_top_crypto() + forex
+        activos = obtener_top_crypto()
 
         for s in activos:
             for tf in timeframes:
@@ -119,16 +153,18 @@ while True:
 
                     if permitido(key):
                         msg = f"""
-🚨 SEÑAL ORION
+🚨 ORION OKX
 
-{s} | {tf}
+{s}
+TF: {tf}
 {sig}
 {datetime.now().strftime("%H:%M:%S")}
 """
+                        print(msg)
                         enviar_telegram(msg)
                         time.sleep(1)
 
     except Exception as e:
         print("ERROR GENERAL:", e)
 
-    time.sleep(20)
+    time.sleep(30)
