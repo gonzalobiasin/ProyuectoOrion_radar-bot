@@ -1,68 +1,44 @@
 import requests
 import time
 import os
-from datetime import datetime
 
 # ============================
 # CONFIG
 # ============================
 
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
-CHAT_ID = "6974761713"
+CHAT_ID =  "6974761713"
+CANAL_ID = -1003937597372        
 
 # ============================
-# TELEGRAM
+# TELEGRAM (DOBLE ENVÍO SEGURO)
 # ============================
 
 def enviar_telegram(msg):
-    try:
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
-    except Exception as e:
-        print("Error Telegram:", e)
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-enviar_telegram("🚀 ORION OKX ACTIVO")
+    # 👉 envío a tu chat (principal)
+    try:
+        r1 = requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+        print("CHAT:", r1.status_code)
+    except Exception as e:
+        print("Error chat:", e)
+
+    # 👉 envío al canal (secundario)
+    try:
+        r2 = requests.post(url, data={"chat_id": CANAL_ID, "text": msg})
+        print("CANAL:", r2.status_code, r2.text)
+    except Exception as e:
+        print("Error canal:", e)
+
+enviar_telegram("🚀 ORION MULTI ACTIVO")
 
 # ============================
 # TIMEFRAMES
 # ============================
 
-timeframes = ["5m", "15m", "1H", "4H", "8H", "12H", "1D"]
-
-# ============================
-# TOP 20 CRYPTO OKX
-# ============================
-
-def obtener_top_crypto():
-    url = "https://www.okx.com/api/v5/market/tickers?instType=SWAP"
-    data = requests.get(url).json()
-
-    if "data" not in data:
-        print("Error OKX:", data)
-        return []
-
-    ordenado = sorted(data["data"], key=lambda x: float(x["volCcy24h"]), reverse=True)
-
-    symbols = []
-    for x in ordenado:
-        if "USDT" in x["instId"]:
-            symbols.append(x["instId"])
-
-    return symbols[:20]
-
-# ============================
-# DATOS
-# ============================
-
-def obtener_datos(symbol, tf):
-    url = f"https://www.okx.com/api/v5/market/candles?instId={symbol}&bar={tf}&limit=100"
-    data = requests.get(url).json()
-
-    if "data" not in data:
-        print("ERROR OKX:", data)
-        return None
-
-    return data["data"]
+TF_OKX = ["5m","15m","1H","4H","8H","12H","1D"]
+TF_SPOT = ["8h","12h","1d"]
 
 # ============================
 # VWAP
@@ -73,22 +49,59 @@ def calcular_vwap(data):
     vol = 0
     vwap_list = []
 
-    for d in reversed(data):
-        h = float(d[2])
-        l = float(d[3])
-        c = float(d[4])
-        v = float(d[5])
-
+    for h,l,c,v in data:
         tp = (h + l + c) / 3
         pv += tp * v
         vol += v
-
         vwap_list.append(pv / vol if vol != 0 else 0)
 
     return vwap_list
 
 # ============================
-# ANTI-SPAM POR VELA
+# OKX PERPETUOS
+# ============================
+
+def okx_top():
+    url = "https://www.okx.com/api/v5/market/tickers?instType=SWAP"
+    data = requests.get(url).json()
+
+    if "data" not in data:
+        return []
+
+    ordenado = sorted(data["data"], key=lambda x: float(x["volCcy24h"]), reverse=True)
+
+    return [x["instId"] for x in ordenado if "USDT" in x["instId"]][:20]
+
+def okx_data(symbol, tf):
+    url = f"https://www.okx.com/api/v5/market/candles?instId={symbol}&bar={tf}&limit=50"
+    r = requests.get(url).json()
+
+    if "data" not in r:
+        return None
+
+    return [
+        [float(x[2]), float(x[3]), float(x[4]), float(x[5])]
+        for x in reversed(r["data"])
+    ]
+
+# ============================
+# BINANCE SPOT
+# ============================
+
+def binance_data(symbol, tf):
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={tf}&limit=50"
+    r = requests.get(url).json()
+
+    if not isinstance(r, list):
+        return None
+
+    return [
+        [float(x[2]), float(x[3]), float(x[4]), float(x[5])]
+        for x in r
+    ]
+
+# ============================
+# ANTI SPAM POR VELA
 # ============================
 
 ultima_vela = {}
@@ -97,85 +110,79 @@ ultima_vela = {}
 # LÓGICA TRADINGVIEW
 # ============================
 
-def evaluar(symbol, tf):
-    data = obtener_datos(symbol, tf)
-
-    if data is None or len(data) < 3:
+def evaluar(data, key, tf):
+    if not data or len(data) < 3:
         return None
 
-    data = list(reversed(data))
-
-    timestamp = data[-1][0]
-    key_vela = f"{symbol}-{tf}"
-
-    if key_vela in ultima_vela and ultima_vela[key_vela] == timestamp:
+    if key in ultima_vela:
         return None
 
-    ultima_vela[key_vela] = timestamp
+    ultima_vela[key] = True
 
-    closes = [float(x[4]) for x in data]
+    closes = [x[2] for x in data]
     vwap = calcular_vwap(data)
 
     c = closes[-1]
-    c_prev = closes[-2]
+    cp = closes[-2]
 
     v = vwap[-1]
-    v_prev = vwap[-2]
+    vp = vwap[-2]
 
-    cond_long = [c > v, c > c_prev, v > v_prev]
-    cond_short = [c < v, c < c_prev, v < v_prev]
+    cond_long = [c > v, c > cp, v > vp]
+    cond_short = [c < v, c < cp, v < vp]
 
-    score_long = sum(cond_long)
-    score_short = sum(cond_short)
-
-    cross_up = c_prev < v_prev and c > v
-    cross_down = c_prev > v_prev and c < v
+    cross_up = cp < vp and c > v
+    cross_dn = cp > vp and c < v
 
     if tf == "5m":
-        if score_long >= 2 and cross_up:
+        if sum(cond_long) >= 2 and cross_up:
             return "LONG"
-        if score_short >= 2 and cross_down:
+        if sum(cond_short) >= 2 and cross_dn:
             return "SHORT"
     else:
-        if score_long >= 3 and cross_up:
+        if sum(cond_long) >= 3 and cross_up:
             return "LONG"
-        if score_short >= 3 and cross_down:
+        if sum(cond_short) >= 3 and cross_dn:
             return "SHORT"
-
-    return None
 
 # ============================
 # LOOP
 # ============================
 
 while True:
-    print("🔄 ESCANEANDO OKX...")
+
+    print("🔄 ESCANEANDO...")
 
     try:
-        activos = obtener_top_crypto()
+        # OKX
+        for s in okx_top():
+            for tf in TF_OKX:
+                sig = evaluar(okx_data(s, tf), f"OKX-{s}-{tf}", tf)
 
-        for s in activos:
-            for tf in timeframes:
-
-                señal = evaluar(s, tf)
-
-                if señal:
-
-                    msg = f"""
+                if sig:
+                    enviar_telegram(f"""
 🚨 Señal Proyecto Orion
 
-Activo: {s}
+Activo: {s}-Perpetual
 Temporalidad: {tf}
-Dirección: {señal}
+Dirección: {sig}
+""")
 
-Hora: {datetime.now().strftime("%H:%M:%S")}
-"""
+        # BINANCE SPOT
+        for s in ["BTCUSDT", "ETHUSDT"]:
+            for tf in TF_SPOT:
+                sig = evaluar(binance_data(s, tf), f"SPOT-{s}-{tf}", "X")
 
-                    print(msg)
-                    enviar_telegram(msg)
-                    time.sleep(1)
+                if sig:
+                    enviar_telegram(f"""
+🚨 Señal Proyecto Orion
+
+Activo: {s}-SPOT
+Temporalidad: {tf}
+Dirección: {sig}
+""")
 
     except Exception as e:
-        print("ERROR GENERAL:", e)
+        print("ERROR:", e)
 
-    time.sleep(30)
+    time.sleep(60)
