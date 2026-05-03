@@ -1,32 +1,34 @@
 import requests
 import time
-from datetime import datetime
+import os
 
 # =========================
 # CONFIG
 # =========================
-TOKEN = "TU_TOKEN"
-CHAT_ID = "TU_CHAT_ID"
+TOKEN = os.getenv("8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g")
+CHAT_ID = os.getenv("6974761713")
 
-SYMBOLS = ["BTCUSDT", "ETHUSDT"]
+# =========================
+# ACTIVOS (20 CRIPTO + EXTRA)
+# =========================
+SYMBOLS = [
+    "BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT",
+    "ADAUSDT","DOGEUSDT","AVAXUSDT","LINKUSDT","MATICUSDT",
+    "TRXUSDT","LTCUSDT","DOTUSDT","ATOMUSDT","NEARUSDT",
+    "APTUSDT","ARBUSDT","OPUSDT","SUIUSDT","INJUSDT",
 
-TIMEFRAMES = {
-    "5m": "5m",
-    "15m": "15m",
-    "30m": "30m",
-    "1h": "1h",
-    "4h": "4h"
-}
+    # FOREX / COMMODITIES
+    "EURUSDT","GBPUSDT","XAUUSDT"
+]
+
+TIMEFRAMES = ["5m","15m","30m","1h","4h"]
 
 # =========================
 # TELEGRAM
 # =========================
 def enviar_telegram(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    data = {
-        "chat_id": CHAT_ID,
-        "text": msg
-    }
+    data = {"chat_id": CHAT_ID, "text": msg}
     try:
         requests.post(url, data=data)
     except:
@@ -35,120 +37,109 @@ def enviar_telegram(msg):
 # =========================
 # DATA BINANCE
 # =========================
-def obtener_datos(symbol, interval):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=100"
+def get_data(symbol, tf):
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={tf}&limit=100"
     data = requests.get(url).json()
 
-    closes = [float(c[4]) for c in data]
-    highs = [float(c[2]) for c in data]
-    lows = [float(c[3]) for c in data]
-    volumes = [float(c[5]) for c in data]
+    closes = [float(x[4]) for x in data]
+    highs = [float(x[2]) for x in data]
+    lows = [float(x[3]) for x in data]
+    volumes = [float(x[5]) for x in data]
 
     return closes, highs, lows, volumes
 
 # =========================
-# VWAP REAL
+# VWAP
 # =========================
-def calcular_vwap(highs, lows, closes, volumes):
+def vwap_calc(h, l, c, v):
+    pv = 0
+    vol = 0
     vwap = []
-    cumulative_pv = 0
-    cumulative_vol = 0
 
-    for i in range(len(closes)):
-        typical_price = (highs[i] + lows[i] + closes[i]) / 3
-        pv = typical_price * volumes[i]
-
-        cumulative_pv += pv
-        cumulative_vol += volumes[i]
-
-        vwap.append(cumulative_pv / cumulative_vol)
+    for i in range(len(c)):
+        tp = (h[i] + l[i] + c[i]) / 3
+        pv += tp * v[i]
+        vol += v[i]
+        vwap.append(pv / vol)
 
     return vwap
 
 # =========================
-# DETECTOR DE SEÑAL
+# SEÑALES (TU LÓGICA EXACTA)
 # =========================
-def detectar_senal(symbol, tf):
+def signal(symbol, tf):
 
-    closes, highs, lows, volumes = obtener_datos(symbol, tf)
-    vwap = calcular_vwap(highs, lows, closes, volumes)
+    c, h, l, v = get_data(symbol, tf)
+    vw = vwap_calc(h, l, c, v)
 
-    if len(closes) < 2:
+    if len(c) < 2:
         return None
 
-    c = closes[-1]
-    c_prev = closes[-2]
+    price = c[-1]
+    prev = c[-2]
 
-    v = vwap[-1]
-    v_prev = vwap[-2]
+    vwap_now = vw[-1]
+    vwap_prev = vw[-2]
 
-    # =========================
     # CONDICIONES
-    # =========================
-    cond1_long = c > v
-    cond2_long = c > c_prev
-    cond3_long = v > v_prev
+    long_cond = [
+        price > vwap_now,
+        price > prev,
+        vwap_now > vwap_prev
+    ]
 
-    cond1_short = c < v
-    cond2_short = c < c_prev
-    cond3_short = v < v_prev
+    short_cond = [
+        price < vwap_now,
+        price < prev,
+        vwap_now < vwap_prev
+    ]
 
-    score_long = sum([cond1_long, cond2_long, cond3_long])
-    score_short = sum([cond1_short, cond2_short, cond3_short])
+    score_long = sum(long_cond)
+    score_short = sum(short_cond)
 
-    # =========================
     # CRUCE
-    # =========================
-    cruce_long = c_prev < v_prev and c > v
-    cruce_short = c_prev > v_prev and c < v
+    cross_long = prev < vwap_prev and price > vwap_now
+    cross_short = prev > vwap_prev and price < vwap_now
 
-    # =========================
-    # REGLAS SEGÚN TF
-    # =========================
-    if tf == "5m":
-        min_score = 2
-    else:
-        min_score = 3
+    # REGLAS
+    min_score = 2 if tf == "5m" else 3
 
-    # =========================
-    # SEÑALES
-    # =========================
-    if score_long >= min_score and cruce_long:
+    if score_long >= min_score and cross_long:
         return "LONG", score_long
 
-    if score_short >= min_score and cruce_short:
+    if score_short >= min_score and cross_short:
         return "SHORT", score_short
 
     return None
 
 # =========================
-# LOOP PRINCIPAL
+# LOOP
 # =========================
-print("🚀 ORION RADAR INICIADO")
+print("🚀 ORION RADAR PRO ACTIVO")
 
 while True:
     try:
         for symbol in SYMBOLS:
             for tf in TIMEFRAMES:
 
-                resultado = detectar_senal(symbol, tf)
+                s = signal(symbol, tf)
 
-                if resultado:
-                    tipo, score = resultado
+                if s:
+                    tipo, score = s
 
-                    mensaje = f"""
+                    msg = f"""
 🚨 SEÑAL ORION
 
 📊 {symbol}
-⏱ TF: {tf}
-📈 Tipo: {tipo}
+⏱ {tf}
+📈 {tipo}
 🔥 Score: {score}
 
-🧠 Basado en VWAP + Momentum + Tendencia
+VWAP + Momentum + Tendencia
 """
 
-                    print(mensaje)
-                    enviar_telegram(mensaje)
+                    print(msg)
+                    enviar_telegram(msg)
 
         time.sleep(60)
 
