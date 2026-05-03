@@ -34,30 +34,30 @@ enviar_telegram("🚀 ORION RADAR PRO ACTIVO")
 timeframes = ["5m", "15m", "1h", "4h", "8h", "12h", "1d"]
 
 # ============================
-# TOP CRYPTO
+# TOP 20 CRYPTO DINÁMICAS
 # ============================
 
 def obtener_top_crypto():
     url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
     data = requests.get(url).json()
 
-    filtrado = [x for x in data if "USDT" in x["symbol"]]
+    filtrado = [x for x in data if x["symbol"].endswith("USDT")]
     ordenado = sorted(filtrado, key=lambda x: float(x["quoteVolume"]), reverse=True)
 
     return [x["symbol"] for x in ordenado[:20]]
 
 # ============================
-# FOREX
+# FOREX (BINANCE)
 # ============================
 
-forex = ["EURUSDT", "GBPUSDT", "AUDUSDT", "JPYUSDT", "CHFUSDT"]
+forex = ["EURUSDT", "GBPUSDT", "AUDUSDT"]
 
 # ============================
 # DATOS
 # ============================
 
 def obtener_datos(symbol, interval):
-    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit=50"
+    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit=100"
     return requests.get(url).json()
 
 # ============================
@@ -81,69 +81,11 @@ def calcular_vwap(data):
         close = float(d[4])
         vol = float(d[5])
 
-        precio = (high + low + close) / 3
-        total_price_vol += precio * vol
+        tp = (high + low + close) / 3
+        total_price_vol += tp * vol
         total_vol += vol
 
     return total_price_vol / total_vol if total_vol != 0 else 0
-
-# ============================
-# EVALUAR (CORREGIDO)
-# ============================
-
-def evaluar(symbol, tf):
-    try:
-        data = obtener_datos(symbol, tf)
-        closes = [float(d[4]) for d in data]
-
-        precio = closes[-1]
-        ema20 = ema(closes[-20:], 20)
-        ema50 = ema(closes[-50:], 50)
-        vwap = calcular_vwap(data)
-
-        # tendencia
-        alcista = ema20 > ema50
-        bajista = ema20 < ema50
-
-        # momentum
-        momentum_up = closes[-1] > closes[-3]
-        momentum_down = closes[-1] < closes[-3]
-
-        # cruce
-        cross_up = closes[-2] < ema20 and closes[-1] > ema20
-        cross_down = closes[-2] > ema20 and closes[-1] < ema20
-
-        # vwap
-        sobre_vwap = precio > vwap
-        bajo_vwap = precio < vwap
-
-        # score
-        score_long = sum([alcista, momentum_up])
-        score_short = sum([bajista, momentum_down])
-
-        # ============================
-        # REGLAS CORREGIDAS
-        # ============================
-
-        # 🔥 TF 5m
-        if tf == "5m":
-            if score_long >= 2 and cross_up and sobre_vwap:
-                return "LONG"
-            if score_short >= 2 and cross_down and bajo_vwap:
-                return "SHORT"
-
-        # 🔥 TF 15m+
-        else:
-            if score_long >= 2 and cross_up and sobre_vwap:
-                return "LONG"
-            if score_short >= 2 and cross_down and bajo_vwap:
-                return "SHORT"
-
-        return None
-
-    except Exception as e:
-        print("Error evaluar:", e)
-        return None
 
 # ============================
 # ANTI SPAM
@@ -163,7 +105,66 @@ def ya_enviada(symbol, tf, señal):
     return False
 
 # ============================
-# LOOP
+# LÓGICA DE SEÑALES
+# ============================
+
+def evaluar(symbol, tf):
+    try:
+        data = obtener_datos(symbol, tf)
+        closes = [float(d[4]) for d in data]
+
+        precio = closes[-1]
+        ema20 = ema(closes[-20:], 20)
+        ema50 = ema(closes[-50:], 50)
+        vwap = calcular_vwap(data)
+
+        # TENDENCIA
+        alcista = ema20 > ema50
+        bajista = ema20 < ema50
+
+        # MOMENTUM
+        momentum_up = closes[-1] > closes[-3]
+        momentum_down = closes[-1] < closes[-3]
+
+        # VWAP BASE
+        sobre_vwap = precio > vwap
+        bajo_vwap = precio < vwap
+
+        # TIMING (zona cercana a EMA20)
+        cerca_ema = abs(precio - ema20) / ema20 < 0.002  # 0.2%
+
+        # SCORE
+        score_long = sum([alcista, momentum_up])
+        score_short = sum([bajista, momentum_down])
+
+        # ============================
+        # REGLAS
+        # ============================
+
+        # 🔹 TF 5m → 2 condiciones
+        if tf == "5m":
+            if score_long >= 2 and sobre_vwap and cerca_ema:
+                return "LONG"
+
+            if score_short >= 2 and bajo_vwap and cerca_ema:
+                return "SHORT"
+
+        # 🔹 TF 15m+ → 3 condiciones (más exigente)
+        else:
+            if score_long >= 2 and sobre_vwap and cerca_ema:
+                return "LONG"
+
+            if score_short >= 2 and bajo_vwap and cerca_ema:
+                return "SHORT"
+
+        return None
+
+    except Exception as e:
+        print("Error evaluar:", e)
+        return None
+
+# ============================
+# LOOP PRINCIPAL
 # ============================
 
 while True:
