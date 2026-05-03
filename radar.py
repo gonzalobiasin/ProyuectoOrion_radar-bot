@@ -13,12 +13,13 @@ def enviar_telegram(msg):
     except Exception as e:
         print("Error Telegram:", e)
 
-enviar_telegram("🚀 ORION OKX PERPETUOS ACTIVO")
+enviar_telegram("🚀 ORION VWAP OKX ACTIVO")
 
+# TIMEFRAMES OKX
 timeframes = ["5m", "15m", "1H", "4H", "8H", "12H", "1D"]
 
 # ============================
-# TOP CRYPTO OKX (SWAP)
+# TOP CRYPTO OKX (PERPETUOS)
 # ============================
 
 def obtener_top_crypto():
@@ -29,7 +30,6 @@ def obtener_top_crypto():
         print("Error OKX:", data)
         return []
 
-    # ordenar por volumen
     ordenado = sorted(data["data"], key=lambda x: float(x["volCcy24h"]), reverse=True)
 
     symbols = []
@@ -40,7 +40,7 @@ def obtener_top_crypto():
     return symbols[:20]
 
 # ============================
-# DATOS VELAS OKX
+# DATOS
 # ============================
 
 def obtener_datos(symbol, tf):
@@ -62,7 +62,7 @@ def calcular_vwap(data):
     vol = 0
     vwap_list = []
 
-    for d in reversed(data):  # OKX viene invertido
+    for d in reversed(data):
         h = float(d[2])
         l = float(d[3])
         c = float(d[4])
@@ -77,20 +77,13 @@ def calcular_vwap(data):
     return vwap_list
 
 # ============================
-# ANTI SPAM
+# CONTROL DE VELA (ANTI SPAM REAL)
 # ============================
 
-ultimas = {}
-
-def permitido(key):
-    ahora = time.time()
-    if key in ultimas and ahora - ultimas[key] < 900:
-        return False
-    ultimas[key] = ahora
-    return True
+ultima_vela = {}
 
 # ============================
-# LÓGICA
+# LÓGICA EXACTA TRADINGVIEW
 # ============================
 
 def evaluar(symbol, tf):
@@ -101,6 +94,14 @@ def evaluar(symbol, tf):
 
     data = list(reversed(data))
 
+    timestamp = data[-1][0]
+    key_vela = f"{symbol}-{tf}"
+
+    if key_vela in ultima_vela and ultima_vela[key_vela] == timestamp:
+        return None
+
+    ultima_vela[key_vela] = timestamp
+
     closes = [float(x[4]) for x in data]
     vwap = calcular_vwap(data)
 
@@ -110,15 +111,25 @@ def evaluar(symbol, tf):
     v = vwap[-1]
     v_prev = vwap[-2]
 
-    cond_long = [c > v, c > c_prev, v > v_prev]
-    cond_short = [c < v, c < c_prev, v < v_prev]
+    # CONDICIONES EXACTAS
+    cond_long = [
+        c > v,
+        c > c_prev,
+        v > v_prev
+    ]
+
+    cond_short = [
+        c < v,
+        c < c_prev,
+        v < v_prev
+    ]
 
     score_long = sum(cond_long)
     score_short = sum(cond_short)
 
-    # cruce mejorado
-    cross_up = c > v and (c_prev < v_prev or abs(c - v) / v < 0.005)
-    cross_down = c < v and (c_prev > v_prev or abs(c - v) / v < 0.005)
+    # CRUCE REAL (SIN FLEXIBILIDAD)
+    cross_up = c_prev < v_prev and c > v
+    cross_down = c_prev > v_prev and c < v
 
     if tf == "5m":
         if score_long >= 2 and cross_up:
@@ -149,20 +160,17 @@ while True:
                 sig = evaluar(s, tf)
 
                 if sig:
-                    key = f"{s}-{tf}-{sig}"
-
-                    if permitido(key):
-                        msg = f"""
-🚨 ORION OKX
+                    msg = f"""
+🚨 ORION VWAP
 
 {s}
 TF: {tf}
 {sig}
 {datetime.now().strftime("%H:%M:%S")}
 """
-                        print(msg)
-                        enviar_telegram(msg)
-                        time.sleep(1)
+                    print(msg)
+                    enviar_telegram(msg)
+                    time.sleep(1)
 
     except Exception as e:
         print("ERROR GENERAL:", e)
