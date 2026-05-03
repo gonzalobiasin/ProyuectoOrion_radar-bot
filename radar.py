@@ -9,16 +9,13 @@ TOKEN = os.getenv("8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g")
 CHAT_ID = os.getenv("6974761713")
 
 # =========================
-# ACTIVOS (20 CRIPTO + EXTRA)
+# ACTIVOS (SOLO VÁLIDOS BINANCE)
 # =========================
 SYMBOLS = [
     "BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT",
     "ADAUSDT","DOGEUSDT","AVAXUSDT","LINKUSDT","MATICUSDT",
     "TRXUSDT","LTCUSDT","DOTUSDT","ATOMUSDT","NEARUSDT",
-    "APTUSDT","ARBUSDT","OPUSDT","SUIUSDT","INJUSDT",
-
-    # FOREX / COMMODITIES
-    "EURUSDT","GBPUSDT","XAUUSDT"
+    "APTUSDT","ARBUSDT","OPUSDT","SUIUSDT","INJUSDT"
 ]
 
 TIMEFRAMES = ["5m","15m","30m","1h","4h"]
@@ -27,26 +24,40 @@ TIMEFRAMES = ["5m","15m","30m","1h","4h"]
 # TELEGRAM
 # =========================
 def enviar_telegram(msg):
+    if not TOKEN or not CHAT_ID:
+        print("⚠️ Faltan TOKEN o CHAT_ID")
+        return
+
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     data = {"chat_id": CHAT_ID, "text": msg}
+
     try:
         requests.post(url, data=data)
-    except:
-        pass
+    except Exception as e:
+        print("Error Telegram:", e)
 
 # =========================
-# DATA BINANCE
+# DATA BINANCE (PROTEGIDO)
 # =========================
 def get_data(symbol, tf):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={tf}&limit=100"
-    data = requests.get(url).json()
+    try:
+        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={tf}&limit=100"
+        data = requests.get(url).json()
 
-    closes = [float(x[4]) for x in data]
-    highs = [float(x[2]) for x in data]
-    lows = [float(x[3]) for x in data]
-    volumes = [float(x[5]) for x in data]
+        # VALIDACIÓN 🔥
+        if not isinstance(data, list) or len(data) < 2:
+            return None
 
-    return closes, highs, lows, volumes
+        closes = [float(x[4]) for x in data]
+        highs = [float(x[2]) for x in data]
+        lows = [float(x[3]) for x in data]
+        volumes = [float(x[5]) for x in data]
+
+        return closes, highs, lows, volumes
+
+    except Exception as e:
+        print(f"Error datos {symbol}: {e}")
+        return None
 
 # =========================
 # VWAP
@@ -69,7 +80,11 @@ def vwap_calc(h, l, c, v):
 # =========================
 def signal(symbol, tf):
 
-    c, h, l, v = get_data(symbol, tf)
+    data = get_data(symbol, tf)
+    if data is None:
+        return None
+
+    c, h, l, v = data
     vw = vwap_calc(h, l, c, v)
 
     if len(c) < 2:
@@ -81,29 +96,27 @@ def signal(symbol, tf):
     vwap_now = vw[-1]
     vwap_prev = vw[-2]
 
-    # CONDICIONES
-    long_cond = [
-        price > vwap_now,
-        price > prev,
-        vwap_now > vwap_prev
-    ]
+    # CONDICIONES LONG
+    cond1_long = price > vwap_now
+    cond2_long = price > prev
+    cond3_long = vwap_now > vwap_prev
 
-    short_cond = [
-        price < vwap_now,
-        price < prev,
-        vwap_now < vwap_prev
-    ]
+    # CONDICIONES SHORT
+    cond1_short = price < vwap_now
+    cond2_short = price < prev
+    cond3_short = vwap_now < vwap_prev
 
-    score_long = sum(long_cond)
-    score_short = sum(short_cond)
+    score_long = sum([cond1_long, cond2_long, cond3_long])
+    score_short = sum([cond1_short, cond2_short, cond3_short])
 
-    # CRUCE
+    # CRUCE VWAP
     cross_long = prev < vwap_prev and price > vwap_now
     cross_short = prev > vwap_prev and price < vwap_now
 
-    # REGLAS
+    # REGLAS SEGÚN TF
     min_score = 2 if tf == "5m" else 3
 
+    # SEÑALES
     if score_long >= min_score and cross_long:
         return "LONG", score_long
 
@@ -113,7 +126,7 @@ def signal(symbol, tf):
     return None
 
 # =========================
-# LOOP
+# LOOP PRINCIPAL
 # =========================
 print("🚀 ORION RADAR PRO ACTIVO")
 
@@ -131,8 +144,8 @@ while True:
 🚨 SEÑAL ORION
 
 📊 {symbol}
-⏱ {tf}
-📈 {tipo}
+⏱ TF: {tf}
+📈 Tipo: {tipo}
 🔥 Score: {score}
 
 VWAP + Momentum + Tendencia
@@ -144,5 +157,5 @@ VWAP + Momentum + Tendencia
         time.sleep(60)
 
     except Exception as e:
-        print("ERROR:", e)
+        print("ERROR GENERAL:", e)
         time.sleep(60)
