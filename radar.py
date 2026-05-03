@@ -5,8 +5,8 @@ import os
 # =========================
 # CONFIG
 # =========================
-TOKEN = os.getenv("8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g")
-CHAT_ID = os.getenv("6974761713")
+TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
+CHAT_ID = "6974761713"
 
 # =========================
 # ACTIVOS (SOLO VÁLIDOS BINANCE)
