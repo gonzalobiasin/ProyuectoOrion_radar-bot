@@ -1,161 +1,177 @@
 import requests
 import time
-import os
+from datetime import datetime
 
-# =========================
+# =====================
 # CONFIG
-# =========================
+# =====================
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
 CHAT_ID = "6974761713"
 
-# =========================
-# ACTIVOS (SOLO VÁLIDOS BINANCE)
-# =========================
-SYMBOLS = [
-    "BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT",
-    "ADAUSDT","DOGEUSDT","AVAXUSDT","LINKUSDT","MATICUSDT",
-    "TRXUSDT","LTCUSDT","DOTUSDT","ATOMUSDT","NEARUSDT",
-    "APTUSDT","ARBUSDT","OPUSDT","SUIUSDT","INJUSDT"
+# Binance FUTUROS
+BASE_URL = "https://fapi.binance.com/fapi/v1"
+
+TIMEFRAMES = ["5m", "15m", "1h", "4h"]
+
+# Forex (Binance pares contra USDT)
+FOREX = [
+    "EURUSDT", "GBPUSDT", "AUDUSDT",
+    "USDJPY", "USDCAD", "USDCHF"
 ]
 
-TIMEFRAMES = ["5m","15m","30m","1h","4h"]
-
-# =========================
+# =====================
 # TELEGRAM
-# =========================
+# =====================
 def enviar_telegram(msg):
-    if not TOKEN or not CHAT_ID:
-        print("⚠️ Faltan TOKEN o CHAT_ID")
-        return
-
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": msg}
-
     try:
+        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        data = {"chat_id": CHAT_ID, "text": msg}
         requests.post(url, data=data)
     except Exception as e:
         print("Error Telegram:", e)
 
-# =========================
-# DATA BINANCE (PROTEGIDO)
-# =========================
-def get_data(symbol, tf):
+# =====================
+# TOP 20 CRYPTO DINÁMICAS
+# =====================
+def get_top_cryptos():
     try:
-        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={tf}&limit=100"
+        url = f"{BASE_URL}/ticker/24hr"
         data = requests.get(url).json()
 
-        # VALIDACIÓN 🔥
-        if not isinstance(data, list) or len(data) < 2:
+        # filtrar solo USDT perpetuos
+        pares = [d for d in data if d["symbol"].endswith("USDT")]
+
+        # ordenar por volumen
+        pares.sort(key=lambda x: float(x["quoteVolume"]), reverse=True)
+
+        top = [p["symbol"] for p in pares[:20]]
+
+        return top
+    except:
+        return ["BTCUSDT", "ETHUSDT"]
+
+# =====================
+# DATA
+# =====================
+def get_klines(symbol, interval):
+    try:
+        url = f"{BASE_URL}/klines"
+        params = {"symbol": symbol, "interval": interval, "limit": 100}
+        data = requests.get(url, params=params).json()
+        return data
+    except:
+        return []
+
+# =====================
+# VWAP
+# =====================
+def calcular_vwap(klines):
+    total_pv = 0
+    total_vol = 0
+
+    for k in klines:
+        close = float(k[4])
+        volume = float(k[5])
+        total_pv += close * volume
+        total_vol += volume
+
+    if total_vol == 0:
+        return 0
+
+    return total_pv / total_vol
+
+# =====================
+# CONDICIONES
+# =====================
+def evaluar(symbol, tf):
+    klines = get_klines(symbol, tf)
+    if len(klines) < 50:
+        return None
+
+    cierres = []
+    for c in klines:
+        try:
+            cierres.append(float(c[4]))
+        except:
             return None
 
-        closes = [float(x[4]) for x in data]
-        highs = [float(x[2]) for x in data]
-        lows = [float(x[3]) for x in data]
-        volumes = [float(x[5]) for x in data]
+    vwap = calcular_vwap(klines)
 
-        return closes, highs, lows, volumes
+    precio = cierres[-1]
+    prev = cierres[-2]
 
-    except Exception as e:
-        print(f"Error datos {symbol}: {e}")
-        return None
+    # tendencia simple
+    tendencia_alcista = precio > vwap and prev < precio
+    tendencia_bajista = precio < vwap and prev > precio
 
-# =========================
-# VWAP
-# =========================
-def vwap_calc(h, l, c, v):
-    pv = 0
-    vol = 0
-    vwap = []
+    condiciones = 0
 
-    for i in range(len(c)):
-        tp = (h[i] + l[i] + c[i]) / 3
-        pv += tp * v[i]
-        vol += v[i]
-        vwap.append(pv / vol)
+    # condición 1: VWAP
+    if precio > vwap:
+        condiciones += 1
 
-    return vwap
+    # condición 2: momentum
+    if precio > prev:
+        condiciones += 1
 
-# =========================
-# SEÑALES (TU LÓGICA EXACTA)
-# =========================
-def signal(symbol, tf):
+    # condición 3: micro tendencia
+    if cierres[-1] > cierres[-5]:
+        condiciones += 1
 
-    data = get_data(symbol, tf)
-    if data is None:
-        return None
+    # lógica según TF
+    if tf == "5m":
+        if condiciones >= 2 and tendencia_alcista:
+            return "LONG"
+        if condiciones >= 2 and tendencia_bajista:
+            return "SHORT"
 
-    c, h, l, v = data
-    vw = vwap_calc(h, l, c, v)
-
-    if len(c) < 2:
-        return None
-
-    price = c[-1]
-    prev = c[-2]
-
-    vwap_now = vw[-1]
-    vwap_prev = vw[-2]
-
-    # CONDICIONES LONG
-    cond1_long = price > vwap_now
-    cond2_long = price > prev
-    cond3_long = vwap_now > vwap_prev
-
-    # CONDICIONES SHORT
-    cond1_short = price < vwap_now
-    cond2_short = price < prev
-    cond3_short = vwap_now < vwap_prev
-
-    score_long = sum([cond1_long, cond2_long, cond3_long])
-    score_short = sum([cond1_short, cond2_short, cond3_short])
-
-    # CRUCE VWAP
-    cross_long = prev < vwap_prev and price > vwap_now
-    cross_short = prev > vwap_prev and price < vwap_now
-
-    # REGLAS SEGÚN TF
-    min_score = 2 if tf == "5m" else 3
-
-    # SEÑALES
-    if score_long >= min_score and cross_long:
-        return "LONG", score_long
-
-    if score_short >= min_score and cross_short:
-        return "SHORT", score_short
+    else:
+        if condiciones >= 3 and tendencia_alcista:
+            return "LONG"
+        if condiciones >= 3 and tendencia_bajista:
+            return "SHORT"
 
     return None
 
-# =========================
+# =====================
 # LOOP PRINCIPAL
-# =========================
-print("🚀 ORION RADAR PRO ACTIVO")
-enviar_telegram("✅ BOT FUNCIONANDO")
-while True:
-    try:
-        for symbol in SYMBOLS:
-            for tf in TIMEFRAMES:
+# =====================
+def run():
+    enviar_telegram("🚀 ORION RADAR PRO ACTIVO")
 
-                s = signal(symbol, tf)
+    while True:
+        try:
+            cryptos = get_top_cryptos()
+            activos = cryptos + FOREX
 
-                if s:
-                    tipo, score = s
+            print("Activos:", activos)
 
-                    msg = f"""
-🚨 SEÑAL ORION
+            for symbol in activos:
+                for tf in TIMEFRAMES:
 
-📊 {symbol}
-⏱ TF: {tf}
-📈 Tipo: {tipo}
-🔥 Score: {score}
+                    señal = evaluar(symbol, tf)
 
-VWAP + Momentum + Tendencia
+                    if señal:
+                        mensaje = f"""
+📡 SEÑAL DETECTADA
+
+Activo: {symbol}
+TF: {tf}
+Dirección: {señal}
+Hora: {datetime.now().strftime('%H:%M:%S')}
 """
+                        print(mensaje)
+                        enviar_telegram(mensaje)
 
-                    print(msg)
-                    enviar_telegram(msg)
+                    time.sleep(0.5)
 
-        time.sleep(60)
+            time.sleep(60)
 
-    except Exception as e:
-        print("ERROR GENERAL:", e)
-        time.sleep(60)
+        except Exception as e:
+            print("ERROR:", e)
+            time.sleep(10)
+
+# =====================
+# START
+# =====================
+run()
