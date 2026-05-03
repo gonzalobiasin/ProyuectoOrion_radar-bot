@@ -1,182 +1,95 @@
 import requests
 import time
-from datetime import datetime
+import os
 
-# =====================
+# ============================
 # CONFIG
-# =====================
+# ============================
+
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
 CHAT_ID = "6974761713"
-
-BASE_URL = "https://fapi.binance.com/fapi/v1"
-
-TIMEFRAMES = ["5m", "15m", "1h", "4h"]
-
-FOREX = ["EURUSDT", "GBPUSDT", "AUDUSDT"]
-
-# =====================
-# STORAGE WINRATE
-# =====================
-stats = {}
-
-# =====================
+# ============================
 # TELEGRAM
-# =====================
+# ============================
+
 def enviar_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        data = {"chat_id": CHAT_ID, "text": msg}
-        requests.post(url, data=data)
-    except:
-        pass
+        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+    except Exception as e:
+        print("Error Telegram:", e)
 
-# =====================
-# TOP CRYPTO DINÁMICO
-# =====================
-def get_top_cryptos():
-    try:
-        url = f"{BASE_URL}/ticker/24hr"
-        data = requests.get(url).json()
+# ============================
+# TEST INICIO
+# ============================
 
-        pares = [d for d in data if d["symbol"].endswith("USDT")]
-        pares.sort(key=lambda x: float(x["quoteVolume"]), reverse=True)
+enviar_telegram("🚀 ORION RADAR PRO ACTIVO")
 
-        return [p["symbol"] for p in pares[:20]]
-    except:
-        return ["BTCUSDT", "ETHUSDT"]
+# ============================
+# ACTIVOS
+# ============================
 
-# =====================
-# DATA
-# =====================
-def get_klines(symbol, interval):
-    try:
-        url = f"{BASE_URL}/klines"
-        params = {"symbol": symbol, "interval": interval, "limit": 100}
-        return requests.get(url, params=params).json()
-    except:
-        return []
+symbols = [
+    "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT",
+    "ADAUSDT", "DOGEUSDT", "AVAXUSDT", "DOTUSDT", "MATICUSDT",
+    "LINKUSDT", "LTCUSDT", "TRXUSDT", "ETCUSDT", "ATOMUSDT",
+    "XLMUSDT", "APTUSDT", "ARBUSDT", "OPUSDT", "NEARUSDT"
+]
 
-# =====================
-# VWAP
-# =====================
-def calcular_vwap(klines):
-    total_pv = 0
-    total_vol = 0
+timeframes = ["5m", "15m", "1h"]
 
-    for k in klines:
-        close = float(k[4])
-        volume = float(k[5])
-        total_pv += close * volume
-        total_vol += volume
+# ============================
+# DATOS BINANCE FUTUROS
+# ============================
 
-    return total_pv / total_vol if total_vol != 0 else 0
+def obtener_datos(symbol, interval):
+    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={symbol}&interval={interval}&limit=50"
+    response = requests.get(url)
+    data = response.json()
+    return data
 
-# =====================
-# WINRATE UPDATE
-# =====================
-def update_winrate(symbol, resultado):
-    if symbol not in stats:
-        stats[symbol] = {"wins": 0, "losses": 0}
+# ============================
+# EVALUAR (FORZADO PARA TEST)
+# ============================
 
-    if resultado:
-        stats[symbol]["wins"] += 1
-    else:
-        stats[symbol]["losses"] += 1
-
-def get_winrate(symbol):
-    if symbol not in stats:
-        return 0
-
-    wins = stats[symbol]["wins"]
-    losses = stats[symbol]["losses"]
-
-    total = wins + losses
-    if total == 0:
-        return 0
-
-    return round((wins / total) * 100, 2)
-
-# =====================
-# LÓGICA
-# =====================
 def evaluar(symbol, tf):
-    klines = get_klines(symbol, tf)
-    if len(klines) < 50:
+    try:
+        data = obtener_datos(symbol, tf)
+
+        # Debug
+        print(f"{symbol} {tf} datos recibidos:", len(data))
+
+        # 🔥 TEST FORZADO
+        return "LONG"
+
+    except Exception as e:
+        print("Error evaluar:", e)
         return None
 
-    closes = [float(c[4]) for c in klines]
+# ============================
+# LOOP PRINCIPAL
+# ============================
 
-    precio = closes[-1]
-    prev = closes[-2]
+while True:
+    print("🔄 escaneando mercado...")
 
-    vwap = calcular_vwap(klines)
+    for symbol in symbols:
+        for tf in timeframes:
 
-    cond1 = precio > vwap
-    cond2 = precio > prev
-    cond3 = closes[-1] > closes[-5]
+            señal = evaluar(symbol, tf)
 
-    score = sum([cond1, cond2, cond3])
-
-    cross_up = prev < vwap and precio > vwap
-    cross_down = prev > vwap and precio < vwap
-
-    if tf == "5m":
-        if score >= 2 and cross_up:
-            return "LONG"
-        if score >= 2 and cross_down:
-            return "SHORT"
-    else:
-        if score >= 3 and cross_up:
-            return "LONG"
-        if score >= 3 and cross_down:
-            return "SHORT"
-
-    return None
-
-# =====================
-# LOOP
-# =====================
-def run():
-    enviar_telegram("🚀 ORION RADAR PRO ACTIVO")
-
-    while True:
-        try:
-            cryptos = get_top_cryptos()
-            activos = cryptos + FOREX
-
-            for symbol in activos:
-                for tf in TIMEFRAMES:
-
-                    señal = evaluar(symbol, tf)
-
-                    if señal:
-                        winrate = get_winrate(symbol)
-
-                        mensaje = f"""
-📡 SEÑAL ORION
+            if señal:
+                mensaje = f"""
+🚨 SEÑAL
 
 Activo: {symbol}
 TF: {tf}
 Dirección: {señal}
-Winrate: {winrate}%
-
-Hora: {datetime.now().strftime('%H:%M:%S')}
 """
-                        print(mensaje)
-                        enviar_telegram(mensaje)
 
-                        # simulación simple
-                        update_winrate(symbol, True)
+                print("Enviando señal:", mensaje)
+                enviar_telegram(mensaje)
 
-                    time.sleep(0.3)
+                time.sleep(1)
 
-            time.sleep(60)
-
-        except Exception as e:
-            print("ERROR:", e)
-            time.sleep(10)
-
-# =====================
-# START
-# =====================
-run()
+    time.sleep(20)
