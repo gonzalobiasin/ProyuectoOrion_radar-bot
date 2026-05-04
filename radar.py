@@ -12,7 +12,7 @@ CHAT_ID = "6974761713"
 GRUPO_ID = "-1003900599071"
 
 # ============================
-# TELEGRAM (DOBLE ENVÍO)
+# TELEGRAM (DOBLE ENVÍO + DEBUG)
 # ============================
 
 def enviar_telegram(msg):
@@ -20,18 +20,20 @@ def enviar_telegram(msg):
 
     # 👉 envío a vos
     try:
-        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
-    except:
-        print("Error enviando a chat")
+        r1 = requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+        print("CHAT:", r1.text)
+    except Exception as e:
+        print("Error chat:", e)
 
-    # 👉 envío al grupo
+    # 👉 envío a grupo/canal
     try:
-        requests.post(url, data={"chat_id": GRUPO_ID, "text": msg})
-    except:
-        print("Error enviando a grupo")
+        r2 = requests.post(url, data={"chat_id": GRUPO_ID, "text": msg})
+        print("CANAL:", r2.text)
+    except Exception as e:
+        print("Error canal:", e)
 
-# mensaje inicial
-enviar_telegram("🚀 ORION MULTI ACTIVO")
+# 🔥 TEST INICIAL
+enviar_telegram("🔥 TEST DESDE CODIGO")
 
 # ============================
 # TIMEFRAMES
@@ -187,6 +189,6 @@ Dirección: {sig}
 """)
 
     except Exception as e:
-        print("ERROR:", e)
+        print("ERROR GENERAL:", e)
 
     time.sleep(60)
