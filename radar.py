@@ -202,10 +202,20 @@ def evaluar(data, key, tf):
 
     señal = None
 
-    if sum(cond_long) >= 2 and cross_up and tendencia_alcista:
-        señal = "LONG"
-    elif sum(cond_short) >= 2 and cross_dn and tendencia_bajista:
-        señal = "SHORT"
+    # 🔥 SOLO MODIFICADO 5M
+    if tf in ["5m","5min"]:
+        movimiento_fuerte = abs(closes[-1] - closes[-3]) > (vwap[-1] * 0.001)
+
+        if sum(cond_long) >= 2 and cross_up and tendencia_alcista and movimiento_fuerte:
+            señal = "LONG"
+        elif sum(cond_short) >= 2 and cross_dn and tendencia_bajista and movimiento_fuerte:
+            señal = "SHORT"
+
+    else:
+        if sum(cond_long) >= 2 and cross_up and tendencia_alcista:
+            señal = "LONG"
+        elif sum(cond_short) >= 2 and cross_dn and tendencia_bajista:
+            señal = "SHORT"
 
     if not señal:
         return None
