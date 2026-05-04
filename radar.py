@@ -7,7 +7,6 @@ import os
 # ============================
 
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
-
 CHAT_ID = "6974761713"
 CANAL_ID = "-1003947013736"
 
@@ -36,16 +35,13 @@ def enviar_telegram(msg):
 
 TF_OKX = ["5m","15m","1H","4H","8H","12H","1D"]
 TF_SPOT = ["8h","12h","1d"]
-TF_FOREX = ["5min","15min","1h","4h","1day"]
+TF_FOREX = ["5min","1h"]
 
 # ============================
-# FOREX PAIRS
+# FOREX
 # ============================
 
-FOREX_PAIRS = [
-    "EUR/USD","GBP/USD","USD/JPY",
-    "AUD/USD","USD/CAD","EUR/JPY"
-]
+FOREX_PAIRS = ["EUR/USD","GBP/USD"]
 
 # ============================
 # VWAP
@@ -107,7 +103,7 @@ def binance_data(symbol, tf):
     ]
 
 # ============================
-# FOREX
+# FOREX DATA
 # ============================
 
 def forex_data(pair, tf):
@@ -137,7 +133,7 @@ def forex_data(pair, tf):
     return data
 
 # ============================
-# ANTI SPAM REAL
+# ANTI-SPAM CORRECTO
 # ============================
 
 ultima_senal = {}
@@ -170,21 +166,19 @@ def evaluar(data, key, tf):
         elif sum(cond_short) >= 2 and cross_dn:
             señal = "SHORT"
     else:
-        if sum(cond_long) >= 3 and cross_up:
+        if sum(cond_long) >= 2 and cross_up:
             señal = "LONG"
-        elif sum(cond_short) >= 3 and cross_dn:
+        elif sum(cond_short) >= 2 and cross_dn:
             señal = "SHORT"
 
     if not señal:
         return None
 
-    # 🔥 CLAVE POR TIEMPO (SOLUCIONA DUPLICADOS)
-    vela_id = f"{key}-{data[-1][0]}"
-
-    if vela_id in ultima_senal:
+    # 🔥 SOLO BLOQUEA SI REPITE MISMA DIRECCIÓN
+    if key in ultima_senal and ultima_senal[key] == señal:
         return None
 
-    ultima_senal[vela_id] = True
+    ultima_senal[key] = señal
 
     return señal
 
