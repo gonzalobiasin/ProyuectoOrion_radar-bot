@@ -11,8 +11,10 @@ TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
 CHAT_ID = "6974761713"
 CANAL_ID = "-1003947013736"
 
+TWELVE_API = "83ae049ec6cf418a9b11adaef4a55706"
+
 # ============================
-# TELEGRAM (DOBLE ENVÍO)
+# TELEGRAM
 # ============================
 
 def enviar_telegram(msg):
@@ -21,12 +23,12 @@ def enviar_telegram(msg):
     try:
         requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
     except:
-        print("Error chat")
+        pass
 
     try:
         requests.post(url, json={"chat_id": CANAL_ID, "text": msg})
     except:
-        print("Error canal")
+        pass
 
 # ============================
 # TIMEFRAMES
@@ -34,6 +36,16 @@ def enviar_telegram(msg):
 
 TF_OKX = ["5m","15m","1H","4H","8H","12H","1D"]
 TF_SPOT = ["8h","12h","1d"]
+TF_FOREX = ["5min","15min","1h","4h","1day"]
+
+# ============================
+# FOREX PAIRS
+# ============================
+
+FOREX_PAIRS = [
+    "EUR/USD","GBP/USD","USD/JPY",
+    "AUD/USD","USD/CAD","EUR/JPY"
+]
 
 # ============================
 # VWAP
@@ -52,7 +64,7 @@ def calcular_vwap(data):
     return vwap_list
 
 # ============================
-# OKX (PERPETUOS)
+# OKX
 # ============================
 
 def okx_top():
@@ -63,7 +75,6 @@ def okx_top():
         return []
 
     ordenado = sorted(data["data"], key=lambda x: float(x["volCcy24h"]), reverse=True)
-
     return [x["instId"] for x in ordenado if "USDT" in x["instId"]][:20]
 
 def okx_data(symbol, tf):
@@ -95,13 +106,42 @@ def binance_data(symbol, tf):
     ]
 
 # ============================
+# FOREX (TWELVE DATA)
+# ============================
+
+def forex_data(pair, tf):
+    if not TWELVE_API:
+        return None
+
+    symbol = pair.replace("/", "")
+
+    url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={tf}&outputsize=50&apikey={TWELVE_API}"
+
+    r = requests.get(url).json()
+
+    if "values" not in r:
+        return None
+
+    data = []
+
+    for x in reversed(r["values"]):
+        h = float(x["high"])
+        l = float(x["low"])
+        c = float(x["close"])
+        v = float(x.get("volume", 1))  # forex no tiene volumen real
+
+        data.append([h,l,c,v])
+
+    return data
+
+# ============================
 # ANTI SPAM
 # ============================
 
 ultima_vela = {}
 
 # ============================
-# LÓGICA DE SEÑALES
+# LÓGICA
 # ============================
 
 def evaluar(data, key, tf):
@@ -125,7 +165,7 @@ def evaluar(data, key, tf):
     cross_up = cp < vp and c > v
     cross_dn = cp > vp and c < v
 
-    if tf == "5m":
+    if tf in ["5m","5min"]:
         if sum(cond_long) >= 2 and cross_up:
             return "LONG"
         if sum(cond_short) >= 2 and cross_dn:
@@ -139,26 +179,25 @@ def evaluar(data, key, tf):
     return None
 
 # ============================
-# LIMPIAR TEXTO (QUITAR SWAP)
+# LIMPIAR TEXTO
 # ============================
 
 def limpiar_activo(symbol):
     return symbol.replace("-SWAP", "")
 
 # ============================
-# LOOP PRINCIPAL
+# LOOP
 # ============================
 
 while True:
 
-    print("🔄 ESCANEANDO...")
+    print("🔄 ESCANEANDO TODO...")
 
     try:
-        # OKX PERPETUOS
+        # CRYPTO
         for s in okx_top():
             for tf in TF_OKX:
-
-                sig = evaluar(okx_data(s, tf), f"{s}-{tf}", tf)
+                sig = evaluar(okx_data(s, tf), f"OKX-{s}-{tf}", tf)
 
                 if sig:
                     limpio = limpiar_activo(s)
@@ -171,11 +210,10 @@ Temporalidad: {tf}
 Dirección: {sig}
 """)
 
-        # BINANCE SPOT
-        for s in ["BTCUSDT", "ETHUSDT"]:
+        # SPOT
+        for s in ["BTCUSDT","ETHUSDT"]:
             for tf in TF_SPOT:
-
-                sig = evaluar(binance_data(s, tf), f"{s}-{tf}", "X")
+                sig = evaluar(binance_data(s, tf), f"SPOT-{s}-{tf}", "X")
 
                 if sig:
                     enviar_telegram(f"""
@@ -186,7 +224,21 @@ Temporalidad: {tf}
 Dirección: {sig}
 """)
 
+        # FOREX
+        for pair in FOREX_PAIRS:
+            for tf in TF_FOREX:
+                sig = evaluar(forex_data(pair, tf), f"FX-{pair}-{tf}", tf)
+
+                if sig:
+                    enviar_telegram(f"""
+🚨 Señal Proyecto Orion
+
+Activo: {pair}-FOREX
+Temporalidad: {tf}
+Dirección: {sig}
+""")
+
     except Exception as e:
-        print("ERROR GENERAL:", e)
+        print("ERROR:", e)
 
     time.sleep(60)
