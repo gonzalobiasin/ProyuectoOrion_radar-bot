@@ -7,30 +7,30 @@ import os
 # ============================
 
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
-CHAT_ID =  "6974761713"
-CANAL_ID = -1003937597372        
+
+CHAT_ID = "6974761713"
+GRUPO_ID = "-1003900599071"
 
 # ============================
-# TELEGRAM (DOBLE ENVÍO SEGURO)
+# TELEGRAM (DOBLE ENVÍO)
 # ============================
 
 def enviar_telegram(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-    # 👉 envío a tu chat (principal)
+    # 👉 envío a vos
     try:
-        r1 = requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
-        print("CHAT:", r1.status_code)
-    except Exception as e:
-        print("Error chat:", e)
+        requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
+    except:
+        print("Error enviando a chat")
 
-    # 👉 envío al canal (secundario)
+    # 👉 envío al grupo
     try:
-        r2 = requests.post(url, data={"chat_id": CANAL_ID, "text": msg})
-        print("CANAL:", r2.status_code, r2.text)
-    except Exception as e:
-        print("Error canal:", e)
+        requests.post(url, data={"chat_id": GRUPO_ID, "text": msg})
+    except:
+        print("Error enviando a grupo")
 
+# mensaje inicial
 enviar_telegram("🚀 ORION MULTI ACTIVO")
 
 # ============================
@@ -101,13 +101,13 @@ def binance_data(symbol, tf):
     ]
 
 # ============================
-# ANTI SPAM POR VELA
+# ANTI SPAM
 # ============================
 
 ultima_vela = {}
 
 # ============================
-# LÓGICA TRADINGVIEW
+# LÓGICA TRADING
 # ============================
 
 def evaluar(data, key, tf):
@@ -145,6 +145,8 @@ def evaluar(data, key, tf):
         if sum(cond_short) >= 3 and cross_dn:
             return "SHORT"
 
+    return None
+
 # ============================
 # LOOP
 # ============================
@@ -157,6 +159,7 @@ while True:
         # OKX
         for s in okx_top():
             for tf in TF_OKX:
+
                 sig = evaluar(okx_data(s, tf), f"OKX-{s}-{tf}", tf)
 
                 if sig:
@@ -171,6 +174,7 @@ Dirección: {sig}
         # BINANCE SPOT
         for s in ["BTCUSDT", "ETHUSDT"]:
             for tf in TF_SPOT:
+
                 sig = evaluar(binance_data(s, tf), f"SPOT-{s}-{tf}", "X")
 
                 if sig:
