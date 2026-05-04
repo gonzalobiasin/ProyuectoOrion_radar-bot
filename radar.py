@@ -1,6 +1,5 @@
 import requests
 import time
-import os
 
 # ============================
 # CONFIG
@@ -10,6 +9,19 @@ TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
 CHAT_ID = "6974761713"
 CANAL_ID = "-1003947013736"
 TWELVE_API = "83ae049ec6cf418a9b11adaef4a55706"
+
+# ============================
+# TOP 30 FIJO
+# ============================
+
+TOP_30 = [
+"BTC-USDT-SWAP","ETH-USDT-SWAP","SOL-USDT-SWAP","BNB-USDT-SWAP","XRP-USDT-SWAP",
+"TON-USDT-SWAP","DOGE-USDT-SWAP","ADA-USDT-SWAP","AVAX-USDT-SWAP","TRX-USDT-SWAP",
+"LINK-USDT-SWAP","DOT-USDT-SWAP","MATIC-USDT-SWAP","LTC-USDT-SWAP","BCH-USDT-SWAP",
+"UNI-USDT-SWAP","NEAR-USDT-SWAP","ICP-USDT-SWAP","XLM-USDT-SWAP","FIL-USDT-SWAP",
+"ARB-USDT-SWAP","OP-USDT-SWAP","RNDR-USDT-SWAP","INJ-USDT-SWAP","APT-USDT-SWAP",
+"SUI-USDT-SWAP","TIA-USDT-SWAP","KAS-USDT-SWAP","SEI-USDT-SWAP","STX-USDT-SWAP"
+]
 
 # ============================
 # TELEGRAM
@@ -48,16 +60,11 @@ def calcular_vwap(data):
     return vwap_list
 
 # ============================
-# OKX
+# OKX TOP VOLUMEN
 # ============================
 
 def okx_top():
-    principales = [
-        "BTC-USDT-SWAP",
-        "ETH-USDT-SWAP",
-        "SOL-USDT-SWAP",
-        "DOGE-USDT-SWAP"
-    ]
+    principales = ["BTC-USDT-SWAP","ETH-USDT-SWAP","SOL-USDT-SWAP","DOGE-USDT-SWAP"]
 
     url = "https://www.okx.com/api/v5/market/tickers?instType=SWAP"
     data = requests.get(url).json()
@@ -70,6 +77,10 @@ def okx_top():
 
     return list(set(principales + top))
 
+# ============================
+# DATA
+# ============================
+
 def okx_data(symbol, tf):
     url = f"https://www.okx.com/api/v5/market/candles?instId={symbol}&bar={tf}&limit=50"
     r = requests.get(url).json()
@@ -80,10 +91,6 @@ def okx_data(symbol, tf):
         [int(x[0]), float(x[2]), float(x[3]), float(x[4]), float(x[5])]
         for x in reversed(r["data"])
     ]
-
-# ============================
-# BINANCE
-# ============================
 
 def binance_data(symbol, tf):
     url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={tf}&limit=50"
@@ -96,10 +103,6 @@ def binance_data(symbol, tf):
         [int(x[0]), float(x[2]), float(x[3]), float(x[4]), float(x[5])]
         for x in r
     ]
-
-# ============================
-# FOREX
-# ============================
 
 def forex_data(pair, tf):
     if not TWELVE_API:
@@ -114,12 +117,7 @@ def forex_data(pair, tf):
 
     data = []
     for x in reversed(r["values"]):
-        t = x["datetime"]
-        h = float(x["high"])
-        l = float(x["low"])
-        c = float(x["close"])
-        v = float(x.get("volume", 1))
-        data.append([t,h,l,c,v])
+        data.append([x["datetime"], float(x["high"]), float(x["low"]), float(x["close"]), float(x.get("volume", 1))])
 
     return data
 
@@ -178,43 +176,45 @@ def obtener_winrate():
 ultima_senal = {}
 
 # ============================
-# LÓGICA
+# LÓGICA INDICADOR (CLAVE)
 # ============================
 
-def evaluar(data, key, tf):
+def evaluar(data, key, tf, es_top=False):
     if not data or len(data) < 6:
         return None
 
     closes = [x[3] for x in data]
     vwap = calcular_vwap(data)
 
-    c, cp = closes[-1], closes[-2]
-    v, vp = vwap[-1], vwap[-2]
+    c = closes[-1]
+    cp = closes[-2]
 
-    tendencia_alcista = vwap[-1] > vwap[-3]
-    tendencia_bajista = vwap[-1] < vwap[-3]
+    v = vwap[-1]
+    vp = vwap[-2]
+    vpp = vwap[-3]
 
-    cond_long = [c > v, c > cp, v > vp]
-    cond_short = [c < v, c < cp, v < vp]
+    trendUp = v > vpp
+    trendDown = v < vpp
 
-    cross_up = c > v and vp <= v
-    cross_dn = c < v and vp >= v
+    scoreLong = (1 if c > v else 0) + (1 if c > cp else 0) + (1 if trendUp else 0)
+    scoreShort = (1 if c < v else 0) + (1 if c < cp else 0) + (1 if trendDown else 0)
+
+    crossUp = c > v and cp <= vp
+    crossDown = c < v and cp >= vp
 
     señal = None
 
-    # 🔥 SOLO MODIFICADO 5M
-    if tf in ["5m","5min"]:
-        movimiento_fuerte = abs(closes[-1] - closes[-3]) > (vwap[-1] * 0.001)
+    # EXACTO TradingView
+    if scoreLong == 3 and crossUp:
+        señal = "LONG"
+    elif scoreShort == 3 and crossDown:
+        señal = "SHORT"
 
-        if sum(cond_long) >= 2 and cross_up and tendencia_alcista and movimiento_fuerte:
+    # FLEX SOLO TOP 30
+    if not señal and es_top:
+        if scoreLong >= 2 and trendUp:
             señal = "LONG"
-        elif sum(cond_short) >= 2 and cross_dn and tendencia_bajista and movimiento_fuerte:
-            señal = "SHORT"
-
-    else:
-        if sum(cond_long) >= 2 and cross_up and tendencia_alcista:
-            señal = "LONG"
-        elif sum(cond_short) >= 2 and cross_dn and tendencia_bajista:
+        elif scoreShort >= 2 and trendDown:
             señal = "SHORT"
 
     if not señal:
@@ -227,24 +227,28 @@ def evaluar(data, key, tf):
     return señal
 
 # ============================
-# LOOP
+# LOOP PRINCIPAL
 # ============================
 
 while True:
 
-    print("🔄 ESCANEANDO ORION...")
+    print("🔄 ESCANEANDO ORION PRO...")
 
     try:
-
         evaluar_resultados()
         winrate = obtener_winrate()
 
-        # CRYPTO
-        for s in okx_top():
+        symbols = list(set(TOP_30 + okx_top()))
+
+        # ===== CRYPTO FUTUROS =====
+        for s in symbols:
+
+            es_top = s in TOP_30
+
             for tf in TF_OKX:
 
                 data = okx_data(s, tf)
-                sig = evaluar(data, f"OKX-{s}-{tf}", tf)
+                sig = evaluar(data, f"OKX-{s}-{tf}", tf, es_top)
 
                 if sig:
                     precio = data[-1][3]
@@ -253,24 +257,24 @@ while True:
                     limpio = s.replace("-SWAP", "")
 
                     enviar_telegram(f"""
-🚨 Proyecto Orion
+🚨 ORION PRO ELITE
 
-Activo: {limpio}-Perpetual
+Activo: {limpio}
 Dirección: {sig}
 Temporalidad: {tf}
 Winrate: {winrate}%
 """)
 
-        # SPOT
+        # ===== SPOT =====
         for s in ["BTCUSDT","ETHUSDT"]:
             for tf in TF_SPOT:
 
                 data = binance_data(s, tf)
-                sig = evaluar(data, f"SPOT-{s}-{tf}", tf)
+                sig = evaluar(data, f"SPOT-{s}-{tf}", tf, True)
 
                 if sig:
                     enviar_telegram(f"""
-🚨 Proyecto Orion SPOT
+🚨 ORION SPOT
 
 Activo: {s}
 Dirección: {sig}
@@ -278,16 +282,16 @@ Temporalidad: {tf}
 Winrate: {winrate}%
 """)
 
-        # FOREX
+        # ===== FOREX =====
         for pair in FOREX_PAIRS:
             for tf in TF_FOREX:
 
                 data = forex_data(pair, tf)
-                sig = evaluar(data, f"FX-{pair}-{tf}", tf)
+                sig = evaluar(data, f"FX-{pair}-{tf}", tf, True)
 
                 if sig:
                     enviar_telegram(f"""
-🚨 Proyecto Orion Forex
+🚨 ORION FOREX
 
 Par: {pair}
 Dirección: {sig}
