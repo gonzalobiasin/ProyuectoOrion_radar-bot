@@ -8,7 +8,7 @@ import os
 
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
 
-CHAT_ID = "6974761713"
+CHAT_ID =  "6974761713"
 CANAL_ID = "-1003947013736"
 
 TWELVE_API = "83ae049ec6cf418a9b11adaef4a55706"
@@ -23,12 +23,12 @@ def enviar_telegram(msg):
     try:
         requests.post(url, json={"chat_id": CHAT_ID, "text": msg})
     except:
-        pass
+        print("Error chat")
 
     try:
         requests.post(url, json={"chat_id": CANAL_ID, "text": msg})
     except:
-        pass
+        print("Error canal")
 
 # ============================
 # TIMEFRAMES
@@ -75,6 +75,7 @@ def okx_top():
         return []
 
     ordenado = sorted(data["data"], key=lambda x: float(x["volCcy24h"]), reverse=True)
+
     return [x["instId"] for x in ordenado if "USDT" in x["instId"]][:20]
 
 def okx_data(symbol, tf):
@@ -128,17 +129,17 @@ def forex_data(pair, tf):
         h = float(x["high"])
         l = float(x["low"])
         c = float(x["close"])
-        v = float(x.get("volume", 1))  # forex no tiene volumen real
+        v = float(x.get("volume", 1))
 
         data.append([h,l,c,v])
 
     return data
 
 # ============================
-# ANTI SPAM
+# ANTI SPAM (POR VELA)
 # ============================
 
-ultima_vela = {}
+ultima_senal = {}
 
 # ============================
 # LÓGICA
@@ -147,11 +148,6 @@ ultima_vela = {}
 def evaluar(data, key, tf):
     if not data or len(data) < 3:
         return None
-
-    if key in ultima_vela:
-        return None
-
-    ultima_vela[key] = True
 
     closes = [x[2] for x in data]
     vwap = calcular_vwap(data)
@@ -165,18 +161,31 @@ def evaluar(data, key, tf):
     cross_up = cp < vp and c > v
     cross_dn = cp > vp and c < v
 
+    señal = None
+
     if tf in ["5m","5min"]:
         if sum(cond_long) >= 2 and cross_up:
-            return "LONG"
-        if sum(cond_short) >= 2 and cross_dn:
-            return "SHORT"
+            señal = "LONG"
+        elif sum(cond_short) >= 2 and cross_dn:
+            señal = "SHORT"
     else:
         if sum(cond_long) >= 3 and cross_up:
-            return "LONG"
-        if sum(cond_short) >= 3 and cross_dn:
-            return "SHORT"
+            señal = "LONG"
+        elif sum(cond_short) >= 3 and cross_dn:
+            señal = "SHORT"
 
-    return None
+    if not señal:
+        return None
+
+    # 🔥 CLAVE POR VELA
+    vela_id = f"{key}-{data[-1][2]}"
+
+    if vela_id in ultima_senal:
+        return None
+
+    ultima_senal[vela_id] = True
+
+    return señal
 
 # ============================
 # LIMPIAR TEXTO
@@ -191,51 +200,61 @@ def limpiar_activo(symbol):
 
 while True:
 
-    print("🔄 ESCANEANDO TODO...")
+    print("🔄 ESCANEANDO ORION...")
 
     try:
-        # CRYPTO
+
+        # ============================
+        # CRYPTO PERPETUOS
+        # ============================
         for s in okx_top():
             for tf in TF_OKX:
+
                 sig = evaluar(okx_data(s, tf), f"OKX-{s}-{tf}", tf)
 
                 if sig:
                     limpio = limpiar_activo(s)
 
                     enviar_telegram(f"""
-🚨 Señal Proyecto Orion
+🚨 Proyecto Orion
 
 Activo: {limpio}-Perpetual
-Temporalidad: {tf}
 Dirección: {sig}
+Temporalidad: {tf}
 """)
 
+        # ============================
         # SPOT
+        # ============================
         for s in ["BTCUSDT","ETHUSDT"]:
             for tf in TF_SPOT:
-                sig = evaluar(binance_data(s, tf), f"SPOT-{s}-{tf}", "X")
+
+                sig = evaluar(binance_data(s, tf), f"SPOT-{s}-{tf}", tf)
 
                 if sig:
                     enviar_telegram(f"""
-🚨 Señal Proyecto Orion
+🚨 Proyecto Orion SPOT
 
-Activo: {s}-SPOT
-Temporalidad: {tf}
+Activo: {s}
 Dirección: {sig}
+Temporalidad: {tf}
 """)
 
+        # ============================
         # FOREX
+        # ============================
         for pair in FOREX_PAIRS:
             for tf in TF_FOREX:
+
                 sig = evaluar(forex_data(pair, tf), f"FX-{pair}-{tf}", tf)
 
                 if sig:
                     enviar_telegram(f"""
-🚨 Señal Proyecto Orion
+🚨 Proyecto Orion Forex
 
-Activo: {pair}-FOREX
-Temporalidad: {tf}
+Par: {pair}
 Dirección: {sig}
+Temporalidad: {tf}
 """)
 
     except Exception as e:
