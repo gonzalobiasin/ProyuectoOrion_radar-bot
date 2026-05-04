@@ -8,7 +8,7 @@ import os
 
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
 
-CHAT_ID =  "6974761713"
+CHAT_ID = "6974761713"
 CANAL_ID = "-1003947013736"
 
 TWELVE_API = "83ae049ec6cf418a9b11adaef4a55706"
@@ -55,7 +55,7 @@ def calcular_vwap(data):
     pv, vol = 0, 0
     vwap_list = []
 
-    for h,l,c,v in data:
+    for _,h,l,c,v in data:
         tp = (h + l + c) / 3
         pv += tp * v
         vol += v
@@ -86,12 +86,12 @@ def okx_data(symbol, tf):
         return None
 
     return [
-        [float(x[2]), float(x[3]), float(x[4]), float(x[5])]
+        [int(x[0]), float(x[2]), float(x[3]), float(x[4]), float(x[5])]
         for x in reversed(r["data"])
     ]
 
 # ============================
-# BINANCE SPOT
+# BINANCE
 # ============================
 
 def binance_data(symbol, tf):
@@ -102,12 +102,12 @@ def binance_data(symbol, tf):
         return None
 
     return [
-        [float(x[2]), float(x[3]), float(x[4]), float(x[5])]
+        [int(x[0]), float(x[2]), float(x[3]), float(x[4]), float(x[5])]
         for x in r
     ]
 
 # ============================
-# FOREX (TWELVE DATA)
+# FOREX
 # ============================
 
 def forex_data(pair, tf):
@@ -126,17 +126,18 @@ def forex_data(pair, tf):
     data = []
 
     for x in reversed(r["values"]):
+        t = x["datetime"]
         h = float(x["high"])
         l = float(x["low"])
         c = float(x["close"])
         v = float(x.get("volume", 1))
 
-        data.append([h,l,c,v])
+        data.append([t,h,l,c,v])
 
     return data
 
 # ============================
-# ANTI SPAM (POR VELA)
+# ANTI SPAM REAL
 # ============================
 
 ultima_senal = {}
@@ -149,7 +150,7 @@ def evaluar(data, key, tf):
     if not data or len(data) < 3:
         return None
 
-    closes = [x[2] for x in data]
+    closes = [x[3] for x in data]
     vwap = calcular_vwap(data)
 
     c, cp = closes[-1], closes[-2]
@@ -177,8 +178,8 @@ def evaluar(data, key, tf):
     if not señal:
         return None
 
-    # 🔥 CLAVE POR VELA
-    vela_id = f"{key}-{data[-1][2]}"
+    # 🔥 CLAVE POR TIEMPO (SOLUCIONA DUPLICADOS)
+    vela_id = f"{key}-{data[-1][0]}"
 
     if vela_id in ultima_senal:
         return None
@@ -204,9 +205,7 @@ while True:
 
     try:
 
-        # ============================
-        # CRYPTO PERPETUOS
-        # ============================
+        # CRYPTO
         for s in okx_top():
             for tf in TF_OKX:
 
@@ -223,9 +222,7 @@ Dirección: {sig}
 Temporalidad: {tf}
 """)
 
-        # ============================
         # SPOT
-        # ============================
         for s in ["BTCUSDT","ETHUSDT"]:
             for tf in TF_SPOT:
 
@@ -240,9 +237,7 @@ Dirección: {sig}
 Temporalidad: {tf}
 """)
 
-        # ============================
         # FOREX
-        # ============================
         for pair in FOREX_PAIRS:
             for tf in TF_FOREX:
 
