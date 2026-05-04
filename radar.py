@@ -61,18 +61,37 @@ def calcular_vwap(data):
     return vwap_list
 
 # ============================
-# OKX
+# OKX TOP + PRINCIPALES
 # ============================
 
 def okx_top():
+
+    principales = [
+        "BTC-USDT-SWAP",
+        "ETH-USDT-SWAP",
+        "SOL-USDT-SWAP",
+        "DOGE-USDT-SWAP"
+    ]
+
     url = "https://www.okx.com/api/v5/market/tickers?instType=SWAP"
     data = requests.get(url).json()
 
     if "data" not in data:
-        return []
+        return principales
 
-    ordenado = sorted(data["data"], key=lambda x: float(x["volCcy24h"]), reverse=True)
-    return [x["instId"] for x in ordenado if "USDT" in x["instId"]][:20]
+    ordenado = sorted(
+        data["data"],
+        key=lambda x: float(x["volCcy24h"]),
+        reverse=True
+    )
+
+    top = [x["instId"] for x in ordenado if "USDT" in x["instId"]][:20]
+
+    return list(set(principales + top))
+
+# ============================
+# OKX DATA
+# ============================
 
 def okx_data(symbol, tf):
     url = f"https://www.okx.com/api/v5/market/candles?instId={symbol}&bar={tf}&limit=50"
@@ -133,13 +152,13 @@ def forex_data(pair, tf):
     return data
 
 # ============================
-# ANTI-SPAM
+# ANTI SPAM
 # ============================
 
 ultima_senal = {}
 
 # ============================
-# LÓGICA CON TENDENCIA
+# LÓGICA MEJORADA
 # ============================
 
 def evaluar(data, key, tf):
@@ -152,28 +171,23 @@ def evaluar(data, key, tf):
     c, cp = closes[-1], closes[-2]
     v, vp = vwap[-1], vwap[-2]
 
-    # 🔥 tendencia simple (CLAVE)
-    tendencia_alcista = closes[-1] > closes[-5]
-    tendencia_bajista = closes[-1] < closes[-5]
+    # 🔥 tendencia basada en VWAP (más real)
+    tendencia_alcista = vwap[-1] > vwap[-3]
+    tendencia_bajista = vwap[-1] < vwap[-3]
 
     cond_long = [c > v, c > cp, v > vp]
     cond_short = [c < v, c < cp, v < vp]
 
-    cross_up = cp < vp and c > v
-    cross_dn = cp > vp and c < v
+    # 🔥 cruce relajado (detecta continuidad)
+    cross_up = c > v and vp <= v
+    cross_dn = c < v and vp >= v
 
     señal = None
 
-    if tf in ["5m","5min"]:
-        if sum(cond_long) >= 2 and cross_up and tendencia_alcista:
-            señal = "LONG"
-        elif sum(cond_short) >= 2 and cross_dn and tendencia_bajista:
-            señal = "SHORT"
-    else:
-        if sum(cond_long) >= 2 and cross_up and tendencia_alcista:
-            señal = "LONG"
-        elif sum(cond_short) >= 2 and cross_dn and tendencia_bajista:
-            señal = "SHORT"
+    if sum(cond_long) >= 2 and cross_up and tendencia_alcista:
+        señal = "LONG"
+    elif sum(cond_short) >= 2 and cross_dn and tendencia_bajista:
+        señal = "SHORT"
 
     if not señal:
         return None
@@ -206,6 +220,7 @@ while True:
         # CRYPTO
         for s in okx_top():
             for tf in TF_OKX:
+
                 sig = evaluar(okx_data(s, tf), f"OKX-{s}-{tf}", tf)
 
                 if sig:
@@ -222,6 +237,7 @@ Temporalidad: {tf}
         # SPOT
         for s in ["BTCUSDT","ETHUSDT"]:
             for tf in TF_SPOT:
+
                 sig = evaluar(binance_data(s, tf), f"SPOT-{s}-{tf}", tf)
 
                 if sig:
@@ -236,6 +252,7 @@ Temporalidad: {tf}
         # FOREX
         for pair in FOREX_PAIRS:
             for tf in TF_FOREX:
+
                 sig = evaluar(forex_data(pair, tf), f"FX-{pair}-{tf}", tf)
 
                 if sig:
