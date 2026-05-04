@@ -6,12 +6,12 @@ import time
 # ============================
 
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
-CHAT_ID = "6974761713"
+CHAT_ID =  "6974761713"
 CANAL_ID = "-1003947013736"
 TWELVE_API = "83ae049ec6cf418a9b11adaef4a55706"
 
 # ============================
-# TOP 30 FIJO
+# TOP 30
 # ============================
 
 TOP_30 = [
@@ -60,7 +60,7 @@ def calcular_vwap(data):
     return vwap_list
 
 # ============================
-# OKX TOP VOLUMEN
+# OKX
 # ============================
 
 def okx_top():
@@ -77,10 +77,6 @@ def okx_top():
 
     return list(set(principales + top))
 
-# ============================
-# DATA
-# ============================
-
 def okx_data(symbol, tf):
     url = f"https://www.okx.com/api/v5/market/candles?instId={symbol}&bar={tf}&limit=50"
     r = requests.get(url).json()
@@ -91,6 +87,10 @@ def okx_data(symbol, tf):
         [int(x[0]), float(x[2]), float(x[3]), float(x[4]), float(x[5])]
         for x in reversed(r["data"])
     ]
+
+# ============================
+# BINANCE
+# ============================
 
 def binance_data(symbol, tf):
     url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={tf}&limit=50"
@@ -103,6 +103,10 @@ def binance_data(symbol, tf):
         [int(x[0]), float(x[2]), float(x[3]), float(x[4]), float(x[5])]
         for x in r
     ]
+
+# ============================
+# FOREX (TwelveData)
+# ============================
 
 def forex_data(pair, tf):
     if not TWELVE_API:
@@ -120,6 +124,41 @@ def forex_data(pair, tf):
         data.append([x["datetime"], float(x["high"]), float(x["low"]), float(x["close"]), float(x.get("volume", 1))])
 
     return data
+
+# ============================
+# FOREX BYBIT (NUEVO)
+# ============================
+
+def bybit_forex_data(symbol, tf):
+    try:
+        interval_map = {
+            "5min": "5"
+        }
+
+        interval = interval_map.get(tf, "5")
+
+        url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol}&interval={interval}&limit=50"
+        r = requests.get(url).json()
+
+        if "result" not in r or "list" not in r["result"]:
+            return None
+
+        data = []
+        for x in reversed(r["result"]["list"]):
+            data.append([
+                int(x[0]),
+                float(x[2]),
+                float(x[3]),
+                float(x[4]),
+                float(x[5])
+            ])
+
+        return data
+
+    except:
+        return None
+
+BYBIT_FOREX = ["XAUUSDT","XAGUSDT"]
 
 # ============================
 # WINRATE
@@ -176,7 +215,7 @@ def obtener_winrate():
 ultima_senal = {}
 
 # ============================
-# LÓGICA INDICADOR (CLAVE)
+# LÓGICA
 # ============================
 
 def evaluar(data, key, tf, es_top=False):
@@ -196,21 +235,19 @@ def evaluar(data, key, tf, es_top=False):
     trendUp = v > vpp
     trendDown = v < vpp
 
-    scoreLong = (1 if c > v else 0) + (1 if c > cp else 0) + (1 if trendUp else 0)
-    scoreShort = (1 if c < v else 0) + (1 if c < cp else 0) + (1 if trendDown else 0)
+    scoreLong = (c > v) + (c > cp) + (trendUp)
+    scoreShort = (c < v) + (c < cp) + (trendDown)
 
     crossUp = c > v and cp <= vp
     crossDown = c < v and cp >= vp
 
     señal = None
 
-    # EXACTO TradingView
     if scoreLong == 3 and crossUp:
         señal = "LONG"
     elif scoreShort == 3 and crossDown:
         señal = "SHORT"
 
-    # FLEX SOLO TOP 30
     if not señal and es_top:
         if scoreLong >= 2 and trendUp:
             señal = "LONG"
@@ -227,26 +264,25 @@ def evaluar(data, key, tf, es_top=False):
     return señal
 
 # ============================
-# LOOP PRINCIPAL
+# LOOP
 # ============================
 
 while True:
 
-    print("🔄 ESCANEANDO ORION PRO...")
+    print("🔄 ESCANEANDO ORION...")
 
     try:
+
         evaluar_resultados()
         winrate = obtener_winrate()
 
         symbols = list(set(TOP_30 + okx_top()))
 
-        # ===== CRYPTO FUTUROS =====
+        # ===== FUTUROS =====
         for s in symbols:
-
             es_top = s in TOP_30
 
             for tf in TF_OKX:
-
                 data = okx_data(s, tf)
                 sig = evaluar(data, f"OKX-{s}-{tf}", tf, es_top)
 
@@ -257,9 +293,9 @@ while True:
                     limpio = s.replace("-SWAP", "")
 
                     enviar_telegram(f"""
-🚨 ORION PRO ELITE
+🚨 Proyecto Orion
 
-Activo: {limpio}
+Activo: {limpio} - Perpetuo
 Dirección: {sig}
 Temporalidad: {tf}
 Winrate: {winrate}%
@@ -274,15 +310,15 @@ Winrate: {winrate}%
 
                 if sig:
                     enviar_telegram(f"""
-🚨 ORION SPOT
+🚨 Proyecto Orion
 
-Activo: {s}
+Activo: {s} - Spot
 Dirección: {sig}
 Temporalidad: {tf}
 Winrate: {winrate}%
 """)
 
-        # ===== FOREX =====
+        # ===== FOREX (TwelveData) =====
         for pair in FOREX_PAIRS:
             for tf in TF_FOREX:
 
@@ -291,9 +327,26 @@ Winrate: {winrate}%
 
                 if sig:
                     enviar_telegram(f"""
-🚨 ORION FOREX
+🚨 Proyecto Orion
 
-Par: {pair}
+Activo: {pair} - Forex
+Dirección: {sig}
+Temporalidad: {tf}
+Winrate: {winrate}%
+""")
+
+        # ===== FOREX BYBIT =====
+        for pair in BYBIT_FOREX:
+            for tf in TF_FOREX:
+
+                data = bybit_forex_data(pair, tf)
+                sig = evaluar(data, f"BYBIT-{pair}-{tf}", tf, True)
+
+                if sig:
+                    enviar_telegram(f"""
+🚨 Proyecto Orion
+
+Activo: {pair} - Forex
 Dirección: {sig}
 Temporalidad: {tf}
 Winrate: {winrate}%
