@@ -9,7 +9,7 @@ import os
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
 
 CHAT_ID = "6974761713"
-GRUPO_ID = "-1003900599071"
+CANAL_ID = "-1003900599071"
 
 # ============================
 # TELEGRAM (DOBLE ENVÍO + DEBUG)
@@ -18,22 +18,20 @@ GRUPO_ID = "-1003900599071"
 def enviar_telegram(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-    # 👉 envío a vos
     try:
         r1 = requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
         print("CHAT:", r1.text)
     except Exception as e:
         print("Error chat:", e)
 
-    # 👉 envío a grupo/canal
     try:
-        r2 = requests.post(url, data={"chat_id": GRUPO_ID, "text": msg})
+        r2 = requests.post(url, data={"chat_id": CANAL_ID, "text": msg})
         print("CANAL:", r2.text)
     except Exception as e:
         print("Error canal:", e)
 
-# 🔥 TEST INICIAL
-enviar_telegram("🔥 TEST DESDE CODIGO")
+# 🔥 TEST
+enviar_telegram("🔥 TEST FINAL CANAL")
 
 # ============================
 # TIMEFRAMES
@@ -47,20 +45,19 @@ TF_SPOT = ["8h","12h","1d"]
 # ============================
 
 def calcular_vwap(data):
-    pv = 0
-    vol = 0
+    pv, vol = 0, 0
     vwap_list = []
 
     for h,l,c,v in data:
         tp = (h + l + c) / 3
         pv += tp * v
         vol += v
-        vwap_list.append(pv / vol if vol != 0 else 0)
+        vwap_list.append(pv / vol if vol else 0)
 
     return vwap_list
 
 # ============================
-# OKX PERPETUOS
+# OKX
 # ============================
 
 def okx_top():
@@ -109,7 +106,7 @@ def binance_data(symbol, tf):
 ultima_vela = {}
 
 # ============================
-# LÓGICA TRADING
+# LÓGICA
 # ============================
 
 def evaluar(data, key, tf):
@@ -124,11 +121,8 @@ def evaluar(data, key, tf):
     closes = [x[2] for x in data]
     vwap = calcular_vwap(data)
 
-    c = closes[-1]
-    cp = closes[-2]
-
-    v = vwap[-1]
-    vp = vwap[-2]
+    c, cp = closes[-1], closes[-2]
+    v, vp = vwap[-1], vwap[-2]
 
     cond_long = [c > v, c > cp, v > vp]
     cond_short = [c < v, c < cp, v < vp]
@@ -150,6 +144,13 @@ def evaluar(data, key, tf):
     return None
 
 # ============================
+# LIMPIAR TEXTO
+# ============================
+
+def limpiar_activo(symbol):
+    return symbol.replace("-SWAP", "")
+
+# ============================
 # LOOP
 # ============================
 
@@ -162,13 +163,15 @@ while True:
         for s in okx_top():
             for tf in TF_OKX:
 
-                sig = evaluar(okx_data(s, tf), f"OKX-{s}-{tf}", tf)
+                sig = evaluar(okx_data(s, tf), f"{s}-{tf}", tf)
 
                 if sig:
+                    limpio = limpiar_activo(s)
+
                     enviar_telegram(f"""
 🚨 Señal Proyecto Orion
 
-Activo: {s}-Perpetual
+Activo: {limpio}-Perpetual
 Temporalidad: {tf}
 Dirección: {sig}
 """)
@@ -177,7 +180,7 @@ Dirección: {sig}
         for s in ["BTCUSDT", "ETHUSDT"]:
             for tf in TF_SPOT:
 
-                sig = evaluar(binance_data(s, tf), f"SPOT-{s}-{tf}", "X")
+                sig = evaluar(binance_data(s, tf), f"{s}-{tf}", "X")
 
                 if sig:
                     enviar_telegram(f"""
