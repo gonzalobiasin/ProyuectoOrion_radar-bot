@@ -7,6 +7,7 @@ import os
 # ============================
 
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
+
 CHAT_ID = "6974761713"
 CANAL_ID = "-1003947013736"
 
@@ -71,7 +72,6 @@ def okx_top():
         return []
 
     ordenado = sorted(data["data"], key=lambda x: float(x["volCcy24h"]), reverse=True)
-
     return [x["instId"] for x in ordenado if "USDT" in x["instId"]][:20]
 
 def okx_data(symbol, tf):
@@ -133,17 +133,17 @@ def forex_data(pair, tf):
     return data
 
 # ============================
-# ANTI-SPAM CORRECTO
+# ANTI-SPAM
 # ============================
 
 ultima_senal = {}
 
 # ============================
-# LÓGICA
+# LÓGICA CON TENDENCIA
 # ============================
 
 def evaluar(data, key, tf):
-    if not data or len(data) < 3:
+    if not data or len(data) < 6:
         return None
 
     closes = [x[3] for x in data]
@@ -151,6 +151,10 @@ def evaluar(data, key, tf):
 
     c, cp = closes[-1], closes[-2]
     v, vp = vwap[-1], vwap[-2]
+
+    # 🔥 tendencia simple (CLAVE)
+    tendencia_alcista = closes[-1] > closes[-5]
+    tendencia_bajista = closes[-1] < closes[-5]
 
     cond_long = [c > v, c > cp, v > vp]
     cond_short = [c < v, c < cp, v < vp]
@@ -161,20 +165,20 @@ def evaluar(data, key, tf):
     señal = None
 
     if tf in ["5m","5min"]:
-        if sum(cond_long) >= 2 and cross_up:
+        if sum(cond_long) >= 2 and cross_up and tendencia_alcista:
             señal = "LONG"
-        elif sum(cond_short) >= 2 and cross_dn:
+        elif sum(cond_short) >= 2 and cross_dn and tendencia_bajista:
             señal = "SHORT"
     else:
-        if sum(cond_long) >= 2 and cross_up:
+        if sum(cond_long) >= 2 and cross_up and tendencia_alcista:
             señal = "LONG"
-        elif sum(cond_short) >= 2 and cross_dn:
+        elif sum(cond_short) >= 2 and cross_dn and tendencia_bajista:
             señal = "SHORT"
 
     if not señal:
         return None
 
-    # 🔥 SOLO BLOQUEA SI REPITE MISMA DIRECCIÓN
+    # 🔥 anti duplicado
     if key in ultima_senal and ultima_senal[key] == señal:
         return None
 
@@ -202,7 +206,6 @@ while True:
         # CRYPTO
         for s in okx_top():
             for tf in TF_OKX:
-
                 sig = evaluar(okx_data(s, tf), f"OKX-{s}-{tf}", tf)
 
                 if sig:
@@ -219,7 +222,6 @@ Temporalidad: {tf}
         # SPOT
         for s in ["BTCUSDT","ETHUSDT"]:
             for tf in TF_SPOT:
-
                 sig = evaluar(binance_data(s, tf), f"SPOT-{s}-{tf}", tf)
 
                 if sig:
@@ -234,7 +236,6 @@ Temporalidad: {tf}
         # FOREX
         for pair in FOREX_PAIRS:
             for tf in TF_FOREX:
-
                 sig = evaluar(forex_data(pair, tf), f"FX-{pair}-{tf}", tf)
 
                 if sig:
