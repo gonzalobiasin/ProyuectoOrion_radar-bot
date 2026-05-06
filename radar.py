@@ -4,7 +4,7 @@ import time
 # ============================
 # VERSION CONTROL
 # ============================
-VERSION = "ORION FINAL V4 (CONFIRMACION REAL 5M)"
+VERSION = "ORION FINAL V5 (CONFIRMACION REAL GLOBAL)"
 
 # ============================
 # CONFIG
@@ -339,7 +339,7 @@ def obtener_winrate():
 ultima_senal = {}
 
 # ============================
-# LÓGICA
+# LOGICA ORION FINAL
 # ============================
 
 def evaluar(data, key, es_top=False):
@@ -351,24 +351,16 @@ def evaluar(data, key, es_top=False):
 
     vwap = calcular_vwap(data)
 
-    # VELAS
-
     c = closes[-1]
     cp = closes[-2]
     c3 = closes[-3]
-
-    # VWAP
 
     v = vwap[-1]
     vp = vwap[-2]
     vpp = vwap[-3]
 
-    # TENDENCIA
-
     trendUp = v > vpp
     trendDown = v < vpp
-
-    # SCORES
 
     scoreLong = (
         (c > v) +
@@ -382,53 +374,27 @@ def evaluar(data, key, es_top=False):
         trendDown
     )
 
-    # ============================
-    # TF 5M → CONFIRMACIÓN REAL
-    # ============================
+    # ======================================
+    # CONFIRMACION REAL GLOBAL
+    # ======================================
 
-    if "5m" in key or "5min" in key:
+    crossUp = (
 
-        # LONG confirmado
+        c > v and
+        cp > vp and
+        c3 <= vpp
 
-        crossUp = (
+    )
 
-            c > v and
-            cp > vp and
-            c3 <= vpp
+    crossDown = (
 
-        )
+        c < v and
+        cp < vp and
+        c3 >= vpp
 
-        # SHORT confirmado
-
-        crossDown = (
-
-            c < v and
-            cp < vp and
-            c3 >= vpp
-
-        )
-
-    # ============================
-    # RESTO TF → NORMAL
-    # ============================
-
-    else:
-
-        crossUp = (
-            c > v and
-            cp <= vp
-        )
-
-        crossDown = (
-            c < v and
-            cp >= vp
-        )
+    )
 
     señal = None
-
-    # ============================
-    # SEÑALES
-    # ============================
 
     if scoreLong == 3 and crossUp:
 
@@ -438,9 +404,7 @@ def evaluar(data, key, es_top=False):
 
         señal = "SHORT"
 
-    # ============================
     # FLEXIBILIDAD TOP COINS
-    # ============================
 
     if not señal and es_top:
 
@@ -452,14 +416,10 @@ def evaluar(data, key, es_top=False):
 
             señal = "SHORT"
 
-    # SIN SEÑAL
-
     if not señal:
         return None
 
-    # ============================
     # ANTI SPAM
-    # ============================
 
     if key in ultima_senal:
 
@@ -492,9 +452,7 @@ while True:
             )
         )
 
-        # ============================
         # FUTUROS
-        # ============================
 
         for s in symbols:
 
@@ -535,9 +493,7 @@ Temporalidad: {tf}
 Winrate: {winrate}%
 """)
 
-        # ============================
         # SPOT
-        # ============================
 
         for s in ["BTCUSDT","ETHUSDT"]:
 
@@ -562,9 +518,7 @@ Temporalidad: {tf}
 Winrate: {winrate}%
 """)
 
-        # ============================
         # FOREX
-        # ============================
 
         for pair in FOREX_PAIRS:
 
@@ -589,9 +543,7 @@ Temporalidad: {tf}
 Winrate: {winrate}%
 """)
 
-        # ============================
         # FOREX BYBIT
-        # ============================
 
         for pair in BYBIT_FOREX:
 
