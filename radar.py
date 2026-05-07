@@ -4,24 +4,27 @@ import time
 # ============================
 # VERSION CONTROL
 # ============================
-VERSION = "ORION FINAL V5 (CONFIRMACION REAL GLOBAL)"
+
+VERSION = "ORION MM ALGO PREMIUM FINAL"
 
 # ============================
 # CONFIG
 # ============================
 
 TOKEN = "8515428568:AAEkRcVKkdePqrtRrZITC60Nc7ExYu7BU7g"
+
 CHAT_ID = "6974761713"
+
 CANAL_ID = "-1003947013736"
+
 TWELVE_API = "83ae049ec6cf418a9b11adaef4a55706"
 
 # ============================
-# TOP COINS EXPANDIDO
+# TOP COINS
 # ============================
 
 TOP_30 = [
 
-# CORE
 "BTC-USDT-SWAP",
 "ETH-USDT-SWAP",
 "SOL-USDT-SWAP",
@@ -53,14 +56,14 @@ TOP_30 = [
 "SEI-USDT-SWAP",
 "STX-USDT-SWAP",
 
-# AI / NARRATIVAS
+# NUEVAS
+
 "TAO-USDT-SWAP",
 "FET-USDT-SWAP",
 "RENDER-USDT-SWAP",
 "WLD-USDT-SWAP",
 "ARKM-USDT-SWAP",
 
-# HYPE / MOMENTUM
 "HYPE-USDT-SWAP",
 "RUNE-USDT-SWAP",
 "CAKE-USDT-SWAP",
@@ -71,7 +74,6 @@ TOP_30 = [
 "PYTH-USDT-SWAP",
 "STRK-USDT-SWAP",
 
-# MEME
 "PEPE-USDT-SWAP",
 "WIF-USDT-SWAP",
 "BONK-USDT-SWAP",
@@ -82,17 +84,14 @@ TOP_30 = [
 "1000BONK-USDT-SWAP",
 "1000FLOKI-USDT-SWAP",
 
-# GAMING / METAVERSE
 "SAND-USDT-SWAP",
 "MANA-USDT-SWAP",
 "GALA-USDT-SWAP",
 
-# DEFI
 "AAVE-USDT-SWAP",
 "DYDX-USDT-SWAP",
 "GMX-USDT-SWAP",
 
-# EXTRA
 "AR-USDT-SWAP",
 "ACH-USDT-SWAP",
 "APE-USDT-SWAP",
@@ -131,50 +130,53 @@ def enviar_telegram(msg):
 
     except:
 
-        print("❌ Error Telegram")
+        print("❌ ERROR TELEGRAM")
 
 # ============================
 # TIMEFRAMES
 # ============================
 
-TF_OKX = ["5m","15m","1H","4H","8H","12H","1D"]
+TF_OKX = [
 
-TF_SPOT = ["8h","12h","1d"]
+"5m",
+"15m",
+"1H",
+"4H",
+"8H",
+"12H",
+"1D"
 
-TF_FOREX = ["5min"]
+]
 
-FOREX_PAIRS = ["EUR/USD"]
+TF_SPOT = [
 
-BYBIT_FOREX = ["XAUUSDT","XAGUSDT"]
+"8h",
+"12h",
+"1d"
+
+]
+
+TF_FOREX = [
+
+"5min"
+
+]
+
+FOREX_PAIRS = [
+
+"EUR/USD"
+
+]
+
+BYBIT_FOREX = [
+
+"XAUUSDT",
+"XAGUSDT"
+
+]
 
 # ============================
-# VWAP
-# ============================
-
-def calcular_vwap(data):
-
-    pv = 0
-    vol = 0
-
-    vwap_list = []
-
-    for _, h, l, c, v in data:
-
-        tp = (h + l + c) / 3
-
-        pv += tp * v
-
-        vol += v
-
-        if vol == 0:
-            vwap_list.append(0)
-        else:
-            vwap_list.append(pv / vol)
-
-    return vwap_list
-
-# ============================
-# OKX
+# OKX TOP
 # ============================
 
 def okx_top():
@@ -204,11 +206,15 @@ def okx_top():
 
         return []
 
+# ============================
+# OKX DATA
+# ============================
+
 def okx_data(symbol, tf):
 
     try:
 
-        url = f"https://www.okx.com/api/v5/market/candles?instId={symbol}&bar={tf}&limit=50"
+        url = f"https://www.okx.com/api/v5/market/candles?instId={symbol}&bar={tf}&limit=200"
 
         r = requests.get(url).json()
 
@@ -219,6 +225,7 @@ def okx_data(symbol, tf):
 
             [
                 int(x[0]),
+                float(x[1]),
                 float(x[2]),
                 float(x[3]),
                 float(x[4]),
@@ -240,7 +247,7 @@ def binance_data(symbol, tf):
 
     try:
 
-        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={tf}&limit=50"
+        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={tf}&limit=200"
 
         r = requests.get(url).json()
 
@@ -251,6 +258,7 @@ def binance_data(symbol, tf):
 
             [
                 int(x[0]),
+                float(x[1]),
                 float(x[2]),
                 float(x[3]),
                 float(x[4]),
@@ -274,7 +282,7 @@ def forex_data(pair, tf):
 
         symbol = pair.replace("/", "")
 
-        url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={tf}&outputsize=50&apikey={TWELVE_API}"
+        url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={tf}&outputsize=200&apikey={TWELVE_API}"
 
         r = requests.get(url).json()
 
@@ -288,6 +296,7 @@ def forex_data(pair, tf):
             data.append([
 
                 x["datetime"],
+                float(x["open"]),
                 float(x["high"]),
                 float(x["low"]),
                 float(x["close"]),
@@ -309,7 +318,7 @@ def bybit_forex_data(symbol, tf):
 
     try:
 
-        url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol}&interval=5&limit=50"
+        url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol}&interval=5&limit=200"
 
         r = requests.get(url).json()
 
@@ -323,6 +332,7 @@ def bybit_forex_data(symbol, tf):
             data.append([
 
                 int(x[0]),
+                float(x[1]),
                 float(x[2]),
                 float(x[3]),
                 float(x[4]),
@@ -335,6 +345,43 @@ def bybit_forex_data(symbol, tf):
     except:
 
         return None
+
+# ============================
+# ATR
+# ============================
+
+def calcular_atr(data, length=10):
+
+    trs = []
+
+    for i in range(1, len(data)):
+
+        high = data[i][2]
+        low = data[i][3]
+        prev_close = data[i-1][4]
+
+        tr = max(
+
+            high - low,
+            abs(high - prev_close),
+            abs(low - prev_close)
+
+        )
+
+        trs.append(tr)
+
+    if len(trs) < length:
+        return None
+
+    atrs = []
+
+    for i in range(length, len(trs)+1):
+
+        atrs.append(
+            sum(trs[i-length:i]) / length
+        )
+
+    return atrs
 
 # ============================
 # WINRATE
@@ -378,7 +425,7 @@ def evaluar_resultados():
         if not data:
             continue
 
-        precio_actual = data[-1][3]
+        precio_actual = data[-1][4]
 
         if (
             s["dir"] == "LONG"
@@ -414,96 +461,112 @@ def obtener_winrate():
 ultima_senal = {}
 
 # ============================
-# LOGICA ORION FINAL
+# MM ALGO PREMIUM
 # ============================
 
-def evaluar(data, key, es_top=False):
+def evaluar(data, key):
 
-    if not data or len(data) < 6:
-        return None
+    try:
 
-    closes = [x[3] for x in data]
-
-    vwap = calcular_vwap(data)
-
-    c = closes[-1]
-    cp = closes[-2]
-    c3 = closes[-3]
-
-    v = vwap[-1]
-    vp = vwap[-2]
-    vpp = vwap[-3]
-
-    trendUp = v > vpp
-    trendDown = v < vpp
-
-    scoreLong = (
-        (c > v) +
-        (c > cp) +
-        trendUp
-    )
-
-    scoreShort = (
-        (c < v) +
-        (c < cp) +
-        trendDown
-    )
-
-    # ======================================
-    # CONFIRMACION REAL GLOBAL
-    # ======================================
-
-    crossUp = (
-
-        c > v and
-        cp > vp and
-        c3 <= vpp
-
-    )
-
-    crossDown = (
-
-        c < v and
-        cp < vp and
-        c3 >= vpp
-
-    )
-
-    señal = None
-
-    if scoreLong == 3 and crossUp:
-
-        señal = "LONG"
-
-    elif scoreShort == 3 and crossDown:
-
-        señal = "SHORT"
-
-    # FLEXIBILIDAD TOP COINS
-
-    if not señal and es_top:
-
-        if scoreLong >= 2 and trendUp:
-
-            señal = "LONG"
-
-        elif scoreShort >= 2 and trendDown:
-
-            señal = "SHORT"
-
-    if not señal:
-        return None
-
-    # ANTI SPAM
-
-    if key in ultima_senal:
-
-        if ultima_senal[key] == señal:
+        if not data or len(data) < 50:
             return None
 
-    ultima_senal[key] = señal
+        closes = [x[4] for x in data]
+        highs = [x[2] for x in data]
+        lows = [x[3] for x in data]
 
-    return señal
+        # =================================
+        # SETTINGS MM ALGO PREMIUM
+        # =================================
+
+        length = 10
+        mult = 10
+        sfilter = 0.5
+
+        atrs = calcular_atr(data, length)
+
+        if not atrs:
+            return None
+
+        long_stops = []
+        short_stops = []
+        dirs = []
+
+        dir_actual = 1
+
+        for i in range(length, len(data)):
+
+            hl2 = (highs[i] + lows[i]) / 2
+
+            atr = atrs[i - length] * mult
+
+            long_stop = hl2 - atr * sfilter
+            short_stop = hl2 + atr * sfilter
+
+            if len(long_stops) > 0:
+
+                prev_long = long_stops[-1]
+                prev_short = short_stops[-1]
+
+                if closes[i-1] > prev_long:
+                    long_stop = max(
+                        long_stop,
+                        prev_long
+                    )
+
+                if closes[i-1] < prev_short:
+                    short_stop = min(
+                        short_stop,
+                        prev_short
+                    )
+
+                if dir_actual == -1 and closes[i] > prev_short:
+                    dir_actual = 1
+
+                elif dir_actual == 1 and closes[i] < prev_long:
+                    dir_actual = -1
+
+            long_stops.append(long_stop)
+            short_stops.append(short_stop)
+            dirs.append(dir_actual)
+
+        if len(dirs) < 3:
+            return None
+
+        actual = dirs[-1]
+        anterior = dirs[-2]
+
+        señal = None
+
+        # BUY
+        if actual == 1 and anterior == -1:
+            señal = "LONG"
+
+        # SELL
+        elif actual == -1 and anterior == 1:
+            señal = "SHORT"
+
+        if not señal:
+            return None
+
+        # ============================
+        # ANTI SPAM
+        # ============================
+
+        if key in ultima_senal:
+
+            if ultima_senal[key] == señal:
+                return None
+
+        ultima_senal[key] = señal
+
+        return señal
+
+    except Exception as e:
+
+        print("ERROR EVALUAR:", e)
+
+        return None
 
 # ============================
 # LOOP
@@ -527,11 +590,11 @@ while True:
             )
         )
 
+        # ============================
         # FUTUROS
+        # ============================
 
         for s in symbols:
-
-            es_top = s in TOP_30
 
             for tf in TF_OKX:
 
@@ -539,13 +602,12 @@ while True:
 
                 sig = evaluar(
                     data,
-                    f"{s}-{tf}",
-                    es_top
+                    f"{s}-{tf}"
                 )
 
                 if sig:
 
-                    precio = data[-1][3]
+                    precio = data[-1][4]
 
                     guardar_senal(
                         s,
@@ -568,9 +630,16 @@ Temporalidad: {tf}
 Winrate: {winrate}%
 """)
 
+        # ============================
         # SPOT
+        # ============================
 
-        for s in ["BTCUSDT","ETHUSDT"]:
+        for s in [
+
+            "BTCUSDT",
+            "ETHUSDT"
+
+        ]:
 
             for tf in TF_SPOT:
 
@@ -578,8 +647,7 @@ Winrate: {winrate}%
 
                 sig = evaluar(
                     data,
-                    f"{s}-{tf}",
-                    True
+                    f"{s}-{tf}"
                 )
 
                 if sig:
@@ -593,7 +661,9 @@ Temporalidad: {tf}
 Winrate: {winrate}%
 """)
 
+        # ============================
         # FOREX
+        # ============================
 
         for pair in FOREX_PAIRS:
 
@@ -603,8 +673,7 @@ Winrate: {winrate}%
 
                 sig = evaluar(
                     data,
-                    f"{pair}-{tf}",
-                    True
+                    f"{pair}-{tf}"
                 )
 
                 if sig:
@@ -618,7 +687,9 @@ Temporalidad: {tf}
 Winrate: {winrate}%
 """)
 
-        # FOREX BYBIT
+        # ============================
+        # ORO / PLATA
+        # ============================
 
         for pair in BYBIT_FOREX:
 
@@ -628,8 +699,7 @@ Winrate: {winrate}%
 
                 sig = evaluar(
                     data,
-                    f"{pair}-{tf}",
-                    True
+                    f"{pair}-{tf}"
                 )
 
                 if sig:
